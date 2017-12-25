@@ -18,8 +18,7 @@
 package org.apache.spark.ml.classification
 
 import org.apache.hadoop.fs.Path
-import org.json4s.{DefaultFormats, JObject}
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.Since
 import org.apache.spark.ml.feature.LabeledPoint
@@ -255,7 +254,7 @@ object DecisionTreeClassificationModel extends MLReadable[DecisionTreeClassifica
     extends MLWriter {
 
     override protected def saveImpl(path: String): Unit = {
-      val extraMetadata: JObject = Map(
+      val extraMetadata: JsObject = Json.obj(
         "numFeatures" -> instance.numFeatures,
         "numClasses" -> instance.numClasses)
       DefaultParamsWriter.saveMetadata(instance, path, sc, Some(extraMetadata))
@@ -272,10 +271,9 @@ object DecisionTreeClassificationModel extends MLReadable[DecisionTreeClassifica
     private val className = classOf[DecisionTreeClassificationModel].getName
 
     override def load(path: String): DecisionTreeClassificationModel = {
-      implicit val format = DefaultFormats
       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
-      val numFeatures = (metadata.metadata \ "numFeatures").extract[Int]
-      val numClasses = (metadata.metadata \ "numClasses").extract[Int]
+      val numFeatures = (metadata.metadata \ "numFeatures").as[Int]
+      val numClasses = (metadata.metadata \ "numClasses").as[Int]
       val root = loadTreeNodes(path, metadata, sparkSession)
       val model = new DecisionTreeClassificationModel(metadata.uid, root, numFeatures, numClasses)
       DefaultParamsReader.getAndSetParams(model, metadata)

@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.execution.streaming
 
-import org.json4s.NoTypeHints
-import org.json4s.jackson.Serialization
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.RuntimeConfig
@@ -79,14 +79,14 @@ case class OffsetSeqMetadata(
     batchWatermarkMs: Long = 0,
     batchTimestampMs: Long = 0,
     conf: Map[String, String] = Map.empty) {
-  def json: String = Serialization.write(this)(OffsetSeqMetadata.format)
+  def json: String = OffsetSeqMetadata.mapper.writeValueAsString(this)
 }
 
 object OffsetSeqMetadata extends Logging {
-  private implicit val format = Serialization.formats(NoTypeHints)
+  private val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
   private val relevantSQLConfs = Seq(SHUFFLE_PARTITIONS, STATE_STORE_PROVIDER_CLASS)
 
-  def apply(json: String): OffsetSeqMetadata = Serialization.read[OffsetSeqMetadata](json)
+  def apply(json: String): OffsetSeqMetadata = mapper.readValue(json, classOf[OffsetSeqMetadata])
 
   def apply(
       batchWatermarkMs: Long,

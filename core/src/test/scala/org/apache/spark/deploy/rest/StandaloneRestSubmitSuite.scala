@@ -24,9 +24,8 @@ import javax.servlet.http.HttpServletResponse
 
 import scala.collection.mutable
 
-import org.json4s.JsonAST._
-import org.json4s.jackson.JsonMethods._
-import org.scalatest.BeforeAndAfterEach
+import org.scalatest.{BeforeAndAfterEach, Matchers}
+import play.api.libs.json._
 
 import org.apache.spark._
 import org.apache.spark.deploy.{SparkSubmit, SparkSubmitArguments}
@@ -38,7 +37,7 @@ import org.apache.spark.util.Utils
 /**
  * Tests for the REST application submission protocol used in standalone cluster mode.
  */
-class StandaloneRestSubmitSuite extends SparkFunSuite with BeforeAndAfterEach {
+class StandaloneRestSubmitSuite extends SparkFunSuite with Matchers with BeforeAndAfterEach {
   private var rpcEnv: Option[RpcEnv] = None
   private var server: Option[RestSubmissionServer] = None
 
@@ -326,12 +325,12 @@ class StandaloneRestSubmitSuite extends SparkFunSuite with BeforeAndAfterEach {
     val v = RestSubmissionServer.PROTOCOL_VERSION
     val submitRequestPath = s"$httpUrl/$v/submissions/create"
     val oldJson = constructSubmitRequest(masterUrl).toJson
-    val oldFields = parse(oldJson).asInstanceOf[JObject].obj
-    val newFields = oldFields ++ Seq(
-      JField("tomato", JString("not-a-fruit")),
-      JField("potato", JString("not-po-tah-to"))
+    val oldFields = Json.parse(oldJson).asInstanceOf[JsObject]
+    val newFields = oldFields ++ Json.obj(
+      "tomato" -> "not-a-fruit",
+      "potato" -> "not-po-tah-to"
     )
-    val newJson = pretty(render(JObject(newFields)))
+    val newJson = Json.prettyPrint(newFields)
     // send two requests, one with the unknown fields and the other without
     val (response1, code1) = sendHttpRequestWithResponse(submitRequestPath, "POST", oldJson)
     val (response2, code2) = sendHttpRequestWithResponse(submitRequestPath, "POST", newJson)
@@ -341,7 +340,7 @@ class StandaloneRestSubmitSuite extends SparkFunSuite with BeforeAndAfterEach {
     assert(code2 === HttpServletResponse.SC_OK)
     // only the response to the modified request should have unknown fields set
     assert(submitResponse1.unknownFields === null)
-    assert(submitResponse2.unknownFields === Array("tomato", "potato"))
+    submitResponse2.unknownFields should contain theSameElementsAs Array("tomato", "potato")
   }
 
   test("client handles faulty server") {

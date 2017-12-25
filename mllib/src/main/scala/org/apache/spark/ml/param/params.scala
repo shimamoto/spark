@@ -25,8 +25,7 @@ import scala.annotation.varargs
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.{DeveloperApi, Since}
 import org.apache.spark.ml.linalg.JsonVectorConverter
@@ -91,7 +90,7 @@ class Param[T](val parent: String, val name: String, val doc: String, val isVali
   def jsonEncode(value: T): String = {
     value match {
       case x: String =>
-        compact(render(JString(x)))
+        JsString(x).toString
       case v: Vector =>
         JsonVectorConverter.toJson(v)
       case _ =>
@@ -122,11 +121,11 @@ private[ml] object Param {
 
   /** Decodes a param value from JSON. */
   def jsonDecode[T](json: String): T = {
-    parse(json) match {
-      case JString(x) =>
+    Json.parse(json) match {
+      case JsString(x) =>
         x.asInstanceOf[T]
-      case JObject(v) =>
-        val keys = v.map(_._1)
+      case JsObject(v) =>
+        val keys = v.map(_._1).toSeq
         assert(keys.contains("type") && keys.contains("values"),
           s"Expect a JSON serialized vector but cannot find fields 'type' and 'values' in $json.")
         JsonVectorConverter.fromJson(json).asInstanceOf[T]
@@ -253,42 +252,42 @@ class DoubleParam(parent: String, name: String, doc: String, isValid: Double => 
   override def w(value: Double): ParamPair[Double] = super.w(value)
 
   override def jsonEncode(value: Double): String = {
-    compact(render(DoubleParam.jValueEncode(value)))
+    DoubleParam.jsValueEncode(value).toString
   }
 
   override def jsonDecode(json: String): Double = {
-    DoubleParam.jValueDecode(parse(json))
+    DoubleParam.jsValueDecode(Json.parse(json))
   }
 }
 
 private[param] object DoubleParam {
-  /** Encodes a param value into JValue. */
-  def jValueEncode(value: Double): JValue = {
+  /** Encodes a param value into JsValue. */
+  def jsValueEncode(value: Double): JsValue = {
     value match {
       case _ if value.isNaN =>
-        JString("NaN")
+        JsString("NaN")
       case Double.NegativeInfinity =>
-        JString("-Inf")
+        JsString("-Inf")
       case Double.PositiveInfinity =>
-        JString("Inf")
+        JsString("Inf")
       case _ =>
-        JDouble(value)
+        JsNumber(value)
     }
   }
 
-  /** Decodes a param value from JValue. */
-  def jValueDecode(jValue: JValue): Double = {
-    jValue match {
-      case JString("NaN") =>
+  /** Decodes a param value from JsValue. */
+  def jsValueDecode(jsValue: JsValue): Double = {
+    jsValue match {
+      case JsString("NaN") =>
         Double.NaN
-      case JString("-Inf") =>
+      case JsString("-Inf") =>
         Double.NegativeInfinity
-      case JString("Inf") =>
+      case JsString("Inf") =>
         Double.PositiveInfinity
-      case JDouble(x) =>
-        x
+      case JsNumber(x) =>
+        x.doubleValue
       case _ =>
-        throw new IllegalArgumentException(s"Cannot decode $jValue to Double.")
+        throw new IllegalArgumentException(s"Cannot decode $jsValue to Double.")
     }
   }
 }
@@ -313,12 +312,11 @@ class IntParam(parent: String, name: String, doc: String, isValid: Int => Boolea
   override def w(value: Int): ParamPair[Int] = super.w(value)
 
   override def jsonEncode(value: Int): String = {
-    compact(render(JInt(value)))
+    JsNumber(value).toString
   }
 
   override def jsonDecode(json: String): Int = {
-    implicit val formats = DefaultFormats
-    parse(json).extract[Int]
+    Json.parse(json).as[Int]
   }
 }
 
@@ -342,43 +340,43 @@ class FloatParam(parent: String, name: String, doc: String, isValid: Float => Bo
   override def w(value: Float): ParamPair[Float] = super.w(value)
 
   override def jsonEncode(value: Float): String = {
-    compact(render(FloatParam.jValueEncode(value)))
+    FloatParam.jsValueEncode(value).toString
   }
 
   override def jsonDecode(json: String): Float = {
-    FloatParam.jValueDecode(parse(json))
+    FloatParam.jsValueDecode(Json.parse(json))
   }
 }
 
 private object FloatParam {
 
-  /** Encodes a param value into JValue. */
-  def jValueEncode(value: Float): JValue = {
+  /** Encodes a param value into JsValue. */
+  def jsValueEncode(value: Float): JsValue = {
     value match {
       case _ if value.isNaN =>
-        JString("NaN")
+        JsString("NaN")
       case Float.NegativeInfinity =>
-        JString("-Inf")
+        JsString("-Inf")
       case Float.PositiveInfinity =>
-        JString("Inf")
+        JsString("Inf")
       case _ =>
-        JDouble(value)
+        JsNumber(value)
     }
   }
 
-  /** Decodes a param value from JValue. */
-  def jValueDecode(jValue: JValue): Float = {
-    jValue match {
-      case JString("NaN") =>
+  /** Decodes a param value from JsValue. */
+  def jsValueDecode(jsValue: JsValue): Float = {
+    jsValue match {
+      case JsString("NaN") =>
         Float.NaN
-      case JString("-Inf") =>
+      case JsString("-Inf") =>
         Float.NegativeInfinity
-      case JString("Inf") =>
+      case JsString("Inf") =>
         Float.PositiveInfinity
-      case JDouble(x) =>
-        x.toFloat
+      case JsNumber(x) =>
+        x.floatValue
       case _ =>
-        throw new IllegalArgumentException(s"Cannot decode $jValue to Float.")
+        throw new IllegalArgumentException(s"Cannot decode $jsValue to Float.")
     }
   }
 }
@@ -403,12 +401,11 @@ class LongParam(parent: String, name: String, doc: String, isValid: Long => Bool
   override def w(value: Long): ParamPair[Long] = super.w(value)
 
   override def jsonEncode(value: Long): String = {
-    compact(render(JInt(value)))
+    JsNumber(value).toString
   }
 
   override def jsonDecode(json: String): Long = {
-    implicit val formats = DefaultFormats
-    parse(json).extract[Long]
+    Json.parse(json).as[Long]
   }
 }
 
@@ -426,12 +423,11 @@ class BooleanParam(parent: String, name: String, doc: String) // No need for isV
   override def w(value: Boolean): ParamPair[Boolean] = super.w(value)
 
   override def jsonEncode(value: Boolean): String = {
-    compact(render(JBool(value)))
+    JsBoolean(value).toString
   }
 
   override def jsonDecode(json: String): Boolean = {
-    implicit val formats = DefaultFormats
-    parse(json).extract[Boolean]
+    Json.parse(json).as[Boolean]
   }
 }
 
@@ -450,13 +446,11 @@ class StringArrayParam(parent: Params, name: String, doc: String, isValid: Array
   def w(value: java.util.List[String]): ParamPair[Array[String]] = w(value.asScala.toArray)
 
   override def jsonEncode(value: Array[String]): String = {
-    import org.json4s.JsonDSL._
-    compact(render(value.toSeq))
+    JsArray(value.toSeq.map(JsString)).toString
   }
 
   override def jsonDecode(json: String): Array[String] = {
-    implicit val formats = DefaultFormats
-    parse(json).extract[Seq[String]].toArray
+    Json.parse(json).as[Seq[String]].toArray
   }
 }
 
@@ -476,14 +470,13 @@ class DoubleArrayParam(parent: Params, name: String, doc: String, isValid: Array
     w(value.asScala.map(_.asInstanceOf[Double]).toArray)
 
   override def jsonEncode(value: Array[Double]): String = {
-    import org.json4s.JsonDSL._
-    compact(render(value.toSeq.map(DoubleParam.jValueEncode)))
+    JsArray(value.toSeq.map(DoubleParam.jsValueEncode)).toString
   }
 
   override def jsonDecode(json: String): Array[Double] = {
-    parse(json) match {
-      case JArray(values) =>
-        values.map(DoubleParam.jValueDecode).toArray
+    Json.parse(json) match {
+      case JsArray(values) =>
+        values.map(DoubleParam.jsValueDecode).toArray
       case _ =>
         throw new IllegalArgumentException(s"Cannot decode $json to Array[Double].")
     }
@@ -510,16 +503,15 @@ class DoubleArrayArrayParam(
     w(value.asScala.map(_.asScala.map(_.asInstanceOf[Double]).toArray).toArray)
 
   override def jsonEncode(value: Array[Array[Double]]): String = {
-    import org.json4s.JsonDSL._
-    compact(render(value.toSeq.map(_.toSeq.map(DoubleParam.jValueEncode))))
+    JsArray(value.toSeq.map(x => JsArray(x.toSeq.map(DoubleParam.jsValueEncode)))).toString
   }
 
   override def jsonDecode(json: String): Array[Array[Double]] = {
-    parse(json) match {
-      case JArray(values) =>
+    Json.parse(json) match {
+      case JsArray(values) =>
         values.map {
-          case JArray(values) =>
-            values.map(DoubleParam.jValueDecode).toArray
+          case JsArray(values) =>
+            values.map(DoubleParam.jsValueDecode).toArray
           case _ =>
             throw new IllegalArgumentException(s"Cannot decode $json to Array[Array[Double]].")
         }.toArray
@@ -545,13 +537,11 @@ class IntArrayParam(parent: Params, name: String, doc: String, isValid: Array[In
     w(value.asScala.map(_.asInstanceOf[Int]).toArray)
 
   override def jsonEncode(value: Array[Int]): String = {
-    import org.json4s.JsonDSL._
-    compact(render(value.toSeq))
+    JsArray(value.toSeq.map(JsNumber(_))).toString
   }
 
   override def jsonDecode(json: String): Array[Int] = {
-    implicit val formats = DefaultFormats
-    parse(json).extract[Seq[Int]].toArray
+    Json.parse(json).as[Seq[Int]].toArray
   }
 }
 

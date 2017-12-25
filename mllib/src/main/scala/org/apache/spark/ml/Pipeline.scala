@@ -23,8 +23,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 import org.apache.hadoop.fs.Path
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.{DeveloperApi, Since}
@@ -221,8 +220,6 @@ object Pipeline extends MLReadable[Pipeline] {
    */
   private[ml] object SharedReadWrite {
 
-    import org.json4s.JsonDSL._
-
     /** Check that all stages are Writable */
     def validateStages(stages: Array[PipelineStage]): Unit = {
       stages.foreach {
@@ -245,7 +242,7 @@ object Pipeline extends MLReadable[Pipeline] {
         sc: SparkContext,
         path: String): Unit = {
       val stageUids = stages.map(_.uid)
-      val jsonParams = List("stageUids" -> parse(compact(render(stageUids.toSeq))))
+      val jsonParams = Json.obj("stageUids" -> JsArray(stageUids.map(JsString)))
       DefaultParamsWriter.saveMetadata(instance, path, sc, paramMap = Some(jsonParams))
 
       // Save stages
@@ -266,9 +263,8 @@ object Pipeline extends MLReadable[Pipeline] {
         path: String): (String, Array[PipelineStage]) = {
       val metadata = DefaultParamsReader.loadMetadata(path, sc, expectedClassName)
 
-      implicit val format = DefaultFormats
       val stagesDir = new Path(path, "stages").toString
-      val stageUids: Array[String] = (metadata.params \ "stageUids").extract[Seq[String]].toArray
+      val stageUids: Array[String] = (metadata.params \ "stageUids").as[Seq[String]].toArray
       val stages: Array[PipelineStage] = stageUids.zipWithIndex.map { case (stageUid, idx) =>
         val stagePath = SharedReadWrite.getStagePath(stageUid, idx, stageUids.length, stagesDir)
         DefaultParamsReader.loadParamsInstance[PipelineStage](stagePath, sc)

@@ -18,8 +18,7 @@
 package org.apache.spark.ml.classification
 
 import com.github.fommil.netlib.BLAS.{getInstance => blas}
-import org.json4s.{DefaultFormats, JObject}
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.Since
 import org.apache.spark.internal.Logging
@@ -355,7 +354,7 @@ object GBTClassificationModel extends MLReadable[GBTClassificationModel] {
 
     override protected def saveImpl(path: String): Unit = {
 
-      val extraMetadata: JObject = Map(
+      val extraMetadata: JsObject = Json.obj(
         numFeaturesKey -> instance.numFeatures,
         numTreesKey -> instance.getNumTrees)
       EnsembleModelReadWrite.saveImpl(instance, path, sparkSession, extraMetadata)
@@ -369,11 +368,10 @@ object GBTClassificationModel extends MLReadable[GBTClassificationModel] {
     private val treeClassName = classOf[DecisionTreeRegressionModel].getName
 
     override def load(path: String): GBTClassificationModel = {
-      implicit val format = DefaultFormats
       val (metadata: Metadata, treesData: Array[(Metadata, Node)], treeWeights: Array[Double]) =
         EnsembleModelReadWrite.loadImpl(path, sparkSession, className, treeClassName)
-      val numFeatures = (metadata.metadata \ numFeaturesKey).extract[Int]
-      val numTrees = (metadata.metadata \ numTreesKey).extract[Int]
+      val numFeatures = (metadata.metadata \ numFeaturesKey).as[Int]
+      val numTrees = (metadata.metadata \ numTreesKey).as[Int]
 
       val trees: Array[DecisionTreeRegressionModel] = treesData.map {
         case (treeMetadata, root) =>

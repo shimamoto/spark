@@ -23,10 +23,7 @@ import java.util.Locale
 import scala.collection.mutable
 
 import org.apache.hadoop.fs.Path
-import org.json4s._
-import org.json4s.{DefaultFormats, JObject}
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.{DeveloperApi, Since}
@@ -276,8 +273,8 @@ private[ml] object DefaultParamsWriter {
       instance: Params,
       path: String,
       sc: SparkContext,
-      extraMetadata: Option[JObject] = None,
-      paramMap: Option[JValue] = None): Unit = {
+      extraMetadata: Option[JsObject] = None,
+      paramMap: Option[JsValue] = None): Unit = {
     val metadataPath = new Path(path, "metadata").toString
     val metadataJson = getMetadataToSave(instance, sc, extraMetadata, paramMap)
     sc.parallelize(Seq(metadataJson), 1).saveAsTextFile(metadataPath)
@@ -292,26 +289,26 @@ private[ml] object DefaultParamsWriter {
   def getMetadataToSave(
       instance: Params,
       sc: SparkContext,
-      extraMetadata: Option[JObject] = None,
-      paramMap: Option[JValue] = None): String = {
+      extraMetadata: Option[JsObject] = None,
+      paramMap: Option[JsValue] = None): String = {
     val uid = instance.uid
     val cls = instance.getClass.getName
     val params = instance.extractParamMap().toSeq.asInstanceOf[Seq[ParamPair[Any]]]
-    val jsonParams = paramMap.getOrElse(render(params.map { case ParamPair(p, v) =>
-      p.name -> parse(p.jsonEncode(v))
+    val jsonParams = paramMap.getOrElse(JsObject(params.map { case ParamPair(p, v) =>
+      p.name -> Json.parse(p.jsonEncode(v))
     }.toList))
-    val basicMetadata = ("class" -> cls) ~
-      ("timestamp" -> System.currentTimeMillis()) ~
-      ("sparkVersion" -> sc.version) ~
-      ("uid" -> uid) ~
-      ("paramMap" -> jsonParams)
+    val basicMetadata = Json.obj("class" -> cls,
+      "timestamp" -> System.currentTimeMillis(),
+      "sparkVersion" -> sc.version,
+      "uid" -> uid,
+      "paramMap" -> jsonParams)
     val metadata = extraMetadata match {
-      case Some(jObject) =>
-        basicMetadata ~ jObject
+      case Some(jsObject) =>
+        basicMetadata ++ jsObject
       case None =>
         basicMetadata
     }
-    val metadataJson: String = compact(render(metadata))
+    val metadataJson: String = metadata.toString
     metadataJson
   }
 }
@@ -341,7 +338,7 @@ private[ml] object DefaultParamsReader {
   /**
    * All info from metadata file.
    *
-   * @param params  paramMap, as a `JValue`
+   * @param params  paramMap, as a `JsValue`
    * @param metadata  All metadata, including the other fields
    * @param metadataJson  Full metadata file String (for debugging)
    */
@@ -350,8 +347,8 @@ private[ml] object DefaultParamsReader {
       uid: String,
       timestamp: Long,
       sparkVersion: String,
-      params: JValue,
-      metadata: JValue,
+      params: JsValue,
+      metadata: JsValue,
       metadataJson: String) {
 
     /**
@@ -359,13 +356,12 @@ private[ml] object DefaultParamsReader {
      * This can be useful for getting a Param value before an instance of `Params`
      * is available.
      */
-    def getParamValue(paramName: String): JValue = {
-      implicit val format = DefaultFormats
+    def getParamValue(paramName: String): JsValue = {
       params match {
-        case JObject(pairs) =>
+        case JsObject(pairs) =>
           val values = pairs.filter { case (pName, jsonValue) =>
             pName == paramName
-          }.map(_._2)
+          }.map(_._2).toSeq
           assert(values.length == 1, s"Expected one instance of Param '$paramName' but found" +
             s" ${values.length} in JSON Params: " + pairs.map(_.toString).mkString(", "))
           values.head
@@ -397,14 +393,13 @@ private[ml] object DefaultParamsReader {
    * @throws IllegalArgumentException if expectedClassName is specified and does not match metadata
    */
   def parseMetadata(metadataStr: String, expectedClassName: String = ""): Metadata = {
-    val metadata = parse(metadataStr)
+    val metadata = Json.parse(metadataStr)
 
-    implicit val format = DefaultFormats
-    val className = (metadata \ "class").extract[String]
-    val uid = (metadata \ "uid").extract[String]
-    val timestamp = (metadata \ "timestamp").extract[Long]
-    val sparkVersion = (metadata \ "sparkVersion").extract[String]
-    val params = metadata \ "paramMap"
+    val className = (metadata \ "class").as[String]
+    val uid = (metadata \ "uid").as[String]
+    val timestamp = (metadata \ "timestamp").as[Long]
+    val sparkVersion = (metadata \ "sparkVersion").as[String]
+    val params = (metadata \ "paramMap").get
     if (expectedClassName.nonEmpty) {
       require(className == expectedClassName, s"Error loading metadata: Expected class name" +
         s" $expectedClassName but found class name $className")
@@ -427,13 +422,12 @@ private[ml] object DefaultParamsReader {
       instance: Params,
       metadata: Metadata,
       skipParams: Option[List[String]] = None): Unit = {
-    implicit val format = DefaultFormats
     metadata.params match {
-      case JObject(pairs) =>
+      case JsObject(pairs) =>
         pairs.foreach { case (paramName, jsonValue) =>
           if (skipParams == None || !skipParams.get.contains(paramName)) {
             val param = instance.getParam(paramName)
-            val value = param.jsonDecode(compact(render(jsonValue)))
+            val value = param.jsonDecode(jsonValue.toString)
             instance.set(param, value)
           }
         }

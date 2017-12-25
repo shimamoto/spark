@@ -18,8 +18,7 @@
 package org.apache.spark.ml.tuning
 
 import org.apache.hadoop.fs.Path
-import org.json4s.{DefaultFormats, _}
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.ml.{Estimator, Model}
@@ -123,40 +122,40 @@ private[ml] object ValidatorParams {
       path: String,
       instance: ValidatorParams,
       sc: SparkContext,
-      extraMetadata: Option[JObject] = None): Unit = {
-    import org.json4s.JsonDSL._
+      extraMetadata: Option[JsObject] = None): Unit = {
 
     var numParamsNotJson = 0
-    val estimatorParamMapsJson = compact(render(
+    val estimatorParamMapsJson = JsArray(
       instance.getEstimatorParamMaps.map { case paramMap =>
-        paramMap.toSeq.map { case ParamPair(p, v) =>
+        JsArray(paramMap.toSeq.map { case ParamPair(p, v) =>
           v match {
             case writeableObj: DefaultParamsWritable =>
               val relativePath = "epm_" + p.name + numParamsNotJson
               val paramPath = new Path(path, relativePath).toString
               numParamsNotJson += 1
               writeableObj.save(paramPath)
-              Map("parent" -> p.parent, "name" -> p.name,
-                "value" -> compact(render(JString(relativePath))),
-                "isJson" -> compact(render(JBool(false))))
+              Json.obj("parent" -> p.parent, "name" -> p.name,
+                "value" -> relativePath,
+                "isJson" -> false)
             case _: MLWritable =>
               throw new NotImplementedError("ValidatorParams.saveImpl does not handle parameters " +
                 "of type: MLWritable that are not DefaultParamsWritable")
             case _ =>
-              Map("parent" -> p.parent, "name" -> p.name, "value" -> p.jsonEncode(v),
-                "isJson" -> compact(render(JBool(true))))
+              Json.obj("parent" -> p.parent, "name" -> p.name,
+                "value" -> Json.parse(p.jsonEncode(v)),
+                "isJson" -> true)
           }
-        }
+        })
       }.toSeq
-    ))
+    )
 
     val params = instance.extractParamMap().toSeq
     val skipParams = List("estimator", "evaluator", "estimatorParamMaps")
-    val jsonParams = render(params
+    val jsonParams = JsObject(params
       .filter { case ParamPair(p, v) => !skipParams.contains(p.name)}
       .map { case ParamPair(p, v) =>
-        p.name -> parse(p.jsonEncode(v))
-      }.toList ++ List("estimatorParamMaps" -> parse(estimatorParamMapsJson))
+        p.name -> Json.parse(p.jsonEncode(v))
+      }.toList ++ List("estimatorParamMaps" -> estimatorParamMapsJson)
     )
 
     DefaultParamsWriter.saveMetadata(instance, path, sc, extraMetadata, Some(jsonParams))
@@ -179,7 +178,6 @@ private[ml] object ValidatorParams {
 
     val metadata = DefaultParamsReader.loadMetadata(path, sc, expectedClassName)
 
-    implicit val format = DefaultFormats
     val evaluatorPath = new Path(path, "evaluator").toString
     val evaluator = DefaultParamsReader.loadParamsInstance[Evaluator](evaluatorPath, sc)
     val estimatorPath = new Path(path, "estimator").toString
@@ -188,18 +186,18 @@ private[ml] object ValidatorParams {
     val uidToParams = Map(evaluator.uid -> evaluator) ++ MetaAlgorithmReadWrite.getUidMap(estimator)
 
     val estimatorParamMaps: Array[ParamMap] =
-      (metadata.params \ "estimatorParamMaps").extract[Seq[Seq[Map[String, String]]]].map {
+        (metadata.params \ "estimatorParamMaps").as[Seq[Seq[Map[String, JsValue]]]].map {
         pMap =>
-          val paramPairs = pMap.map { case pInfo: Map[String, String] =>
-            val est = uidToParams(pInfo("parent"))
-            val param = est.getParam(pInfo("name"))
+          val paramPairs = pMap.map { case pInfo: Map[String, JsValue] =>
+            val est = uidToParams(pInfo("parent").as[String])
+            val param = est.getParam(pInfo("name").as[String])
             // [Spark-21221] introduced the isJson field
             if (!pInfo.contains("isJson") ||
-                (pInfo.contains("isJson") && pInfo("isJson").toBoolean.booleanValue())) {
-              val value = param.jsonDecode(pInfo("value"))
+                (pInfo.contains("isJson") && pInfo("isJson").as[Boolean])) {
+              val value = param.jsonDecode(pInfo("value").toString)
               param -> value
             } else {
-              val relativePath = param.jsonDecode(pInfo("value")).toString
+              val relativePath = pInfo("value").as[String]
               val value = DefaultParamsReader
                 .loadParamsInstance[MLWritable](new Path(path, relativePath).toString, sc)
               param -> value

@@ -25,9 +25,7 @@ import scala.collection.mutable
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe._
 
-import org.json4s.DefaultFormats
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods.{compact, render}
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Since
@@ -644,8 +642,8 @@ object PrefixSpanModel extends Loader[PrefixSpanModel[_]] {
       val sc = model.freqSequences.sparkContext
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
 
-      val metadata = compact(render(
-        ("class" -> thisClassName) ~ ("version" -> thisFormatVersion)))
+      val metadata = Json.obj(
+        "class" -> thisClassName, "version" -> thisFormatVersion).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
       // Get the type of item class
@@ -665,7 +663,6 @@ object PrefixSpanModel extends Loader[PrefixSpanModel[_]] {
     }
 
     def load(sc: SparkContext, path: String): PrefixSpanModel[_] = {
-      implicit val formats = DefaultFormats
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
 
       val (className, formatVersion, metadata) = Loader.loadMetadata(sc, path)

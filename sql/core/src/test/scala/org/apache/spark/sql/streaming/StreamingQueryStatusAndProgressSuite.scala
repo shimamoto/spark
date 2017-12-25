@@ -22,10 +22,9 @@ import java.util.UUID
 import scala.collection.JavaConverters._
 import scala.language.postfixOps
 
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.SpanSugar._
+import play.api.libs.json.Json.parse
 
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.functions._
@@ -72,7 +71,7 @@ class StreamingQueryStatusAndProgressSuite extends StreamTest with Eventually {
         |  }
         |}
       """.stripMargin.trim)
-    assert(compact(parse(json1)) === testProgress1.json)
+    assert(parse(json1).toString === testProgress1.json)
 
     val json2 = testProgress2.prettyJson
     assertJson(
@@ -104,12 +103,12 @@ class StreamingQueryStatusAndProgressSuite extends StreamTest with Eventually {
          |  }
          |}
       """.stripMargin.trim)
-    assert(compact(parse(json2)) === testProgress2.json)
+    assert(parse(json2).toString === testProgress2.json)
   }
 
   test("StreamingQueryProgress - json") {
-    assert(compact(parse(testProgress1.json)) === testProgress1.json)
-    assert(compact(parse(testProgress2.json)) === testProgress2.json)
+    assert(parse(testProgress1.json).toString === testProgress1.json)
+    assert(parse(testProgress2.json).toString === testProgress2.json)
   }
 
   test("StreamingQueryProgress - toString") {
@@ -131,7 +130,7 @@ class StreamingQueryStatusAndProgressSuite extends StreamTest with Eventually {
   }
 
   test("StreamingQueryStatus - json") {
-    assert(compact(parse(testStatus.json)) === testStatus.json)
+    assert(parse(testStatus.json).toString === testStatus.json)
   }
 
   test("StreamingQueryStatus - toString") {

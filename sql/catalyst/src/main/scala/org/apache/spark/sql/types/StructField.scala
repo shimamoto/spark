@@ -17,8 +17,7 @@
 
 package org.apache.spark.sql.types
 
-import org.json4s.JsonAST.JValue
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.InterfaceStability
 
@@ -50,11 +49,11 @@ case class StructField(
   // override the default toString to be compatible with legacy parquet files.
   override def toString: String = s"StructField($name,$dataType,$nullable)"
 
-  private[sql] def jsonValue: JValue = {
-    ("name" -> name) ~
-      ("type" -> dataType.jsonValue) ~
-      ("nullable" -> nullable) ~
-      ("metadata" -> metadata.jsonValue)
+  private[sql] def jsonValue: JsValue = {
+    Json.obj("name" -> name,
+      "type" -> dataType.jsonValue,
+      "nullable" -> nullable,
+      "metadata" -> metadata.jsonValue)
   }
 
   /**

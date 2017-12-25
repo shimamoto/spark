@@ -23,9 +23,9 @@ import scala.collection.mutable
 import scala.io.Source
 
 import org.apache.hadoop.fs.Path
-import org.json4s.jackson.JsonMethods._
 import org.mockito.Mockito
 import org.scalatest.BeforeAndAfter
+import play.api.libs.json._
 
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
@@ -179,9 +179,9 @@ class EventLoggingListenerSuite extends SparkFunSuite with LocalSparkContext wit
       assert(lines(0).contains("SparkListenerLogStart"))
       assert(lines(1).contains("SparkListenerApplicationStart"))
       assert(lines(2).contains("SparkListenerApplicationEnd"))
-      assert(JsonProtocol.sparkEventFromJson(parse(lines(0))) === logStart)
-      assert(JsonProtocol.sparkEventFromJson(parse(lines(1))) === applicationStart)
-      assert(JsonProtocol.sparkEventFromJson(parse(lines(2))) === applicationEnd)
+      assert(JsonProtocol.sparkEventFromJson(Json.parse(lines(0))) === logStart)
+      assert(JsonProtocol.sparkEventFromJson(Json.parse(lines(1))) === applicationStart)
+      assert(JsonProtocol.sparkEventFromJson(Json.parse(lines(2))) === applicationEnd)
     } finally {
       logData.close()
     }
@@ -236,7 +236,7 @@ class EventLoggingListenerSuite extends SparkFunSuite with LocalSparkContext wit
       lines.foreach { line =>
         eventSet.foreach { event =>
           if (line.contains(event)) {
-            val parsedEvent = JsonProtocol.sparkEventFromJson(parse(line))
+            val parsedEvent = JsonProtocol.sparkEventFromJson(Json.parse(line))
             val eventType = Utils.getFormattedClassName(parsedEvent)
             if (eventType == event) {
               eventSet.remove(event)
@@ -244,7 +244,7 @@ class EventLoggingListenerSuite extends SparkFunSuite with LocalSparkContext wit
           }
         }
       }
-      assert(JsonProtocol.sparkEventFromJson(parse(lines(0))) === logStart)
+      assert(JsonProtocol.sparkEventFromJson(Json.parse(lines(0))) === logStart)
       assert(eventSet.isEmpty, "The following events are missing: " + eventSet.toSeq)
     } {
       logData.close()

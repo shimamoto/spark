@@ -17,7 +17,7 @@
 
 package org.apache.spark.ml.linalg
 
-import org.json4s.jackson.JsonMethods.parse
+import play.api.libs.json.Json.parse
 
 import org.apache.spark.SparkFunSuite
 

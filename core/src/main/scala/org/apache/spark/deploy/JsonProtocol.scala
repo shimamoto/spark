@@ -17,8 +17,7 @@
 
 package org.apache.spark.deploy
 
-import org.json4s.JsonAST.JObject
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.deploy.DeployMessages.{MasterStateResponse, WorkerStateResponse}
 import org.apache.spark.deploy.master._
@@ -45,19 +44,21 @@ private[deploy] object JsonProtocol {
    *         `lastheartbeat` time in milliseconds that the latest heart beat message from the
    *         worker is received
    */
-  def writeWorkerInfo(obj: WorkerInfo): JObject = {
-    ("id" -> obj.id) ~
-    ("host" -> obj.host) ~
-    ("port" -> obj.port) ~
-    ("webuiaddress" -> obj.webUiAddress) ~
-    ("cores" -> obj.cores) ~
-    ("coresused" -> obj.coresUsed) ~
-    ("coresfree" -> obj.coresFree) ~
-    ("memory" -> obj.memory) ~
-    ("memoryused" -> obj.memoryUsed) ~
-    ("memoryfree" -> obj.memoryFree) ~
-    ("state" -> obj.state.toString) ~
-    ("lastheartbeat" -> obj.lastHeartbeat)
+  def writeWorkerInfo(obj: WorkerInfo): JsObject = {
+    Json.obj(
+      "id" -> obj.id,
+      "host" -> obj.host,
+      "port" -> obj.port,
+      "webuiaddress" -> obj.webUiAddress,
+      "cores" -> obj.cores,
+      "coresused" -> obj.coresUsed,
+      "coresfree" -> obj.coresFree,
+      "memory" -> obj.memory,
+      "memoryused" -> obj.memoryUsed,
+      "memoryfree" -> obj.memoryFree,
+      "state" -> obj.state.toString,
+      "lastheartbeat" -> obj.lastHeartbeat
+    )
   }
 
   /**
@@ -75,16 +76,18 @@ private[deploy] object JsonProtocol {
    *         `state` state of the application, see [[ApplicationState]]
    *         `duration` time in milliseconds that the application has been running
    */
-  def writeApplicationInfo(obj: ApplicationInfo): JObject = {
-    ("id" -> obj.id) ~
-    ("starttime" -> obj.startTime) ~
-    ("name" -> obj.desc.name) ~
-    ("cores" -> obj.coresGranted) ~
-    ("user" -> obj.desc.user) ~
-    ("memoryperslave" -> obj.desc.memoryPerExecutorMB) ~
-    ("submitdate" -> obj.submitDate.toString) ~
-    ("state" -> obj.state.toString) ~
-    ("duration" -> obj.duration)
+  def writeApplicationInfo(obj: ApplicationInfo): JsObject = {
+    Json.obj(
+      "id" -> obj.id,
+      "starttime" -> obj.startTime,
+      "name" -> obj.desc.name,
+      "cores" -> obj.coresGranted,
+      "user" -> obj.desc.user,
+      "memoryperslave" -> obj.desc.memoryPerExecutorMB,
+      "submitdate" -> obj.submitDate.toString,
+      "state" -> obj.state.toString,
+      "duration" -> obj.duration
+    )
   }
 
   /**
@@ -98,12 +101,15 @@ private[deploy] object JsonProtocol {
    *         `user` name of the user who submitted the application
    *         `command` the command string used to submit the application
    */
-  def writeApplicationDescription(obj: ApplicationDescription): JObject = {
-    ("name" -> obj.name) ~
-    ("cores" -> obj.maxCores.getOrElse(0)) ~
-    ("memoryperslave" -> obj.memoryPerExecutorMB) ~
-    ("user" -> obj.user) ~
-    ("command" -> obj.command.toString)
+  def writeApplicationDescription(obj: ApplicationDescription): JsObject = {
+    val maxCores = obj.maxCores.getOrElse(0)
+    Json.obj(
+      "name" -> obj.name,
+      "cores" -> maxCores,
+      "memoryperslave" -> obj.memoryPerExecutorMB,
+      "user" -> obj.user,
+      "command" -> obj.command.toString
+    )
   }
 
   /**
@@ -117,11 +123,13 @@ private[deploy] object JsonProtocol {
    *         `appdesc` a Json object of the [[ApplicationDescription]] of the application that the
    *         executor is working on
    */
-  def writeExecutorRunner(obj: ExecutorRunner): JObject = {
-    ("id" -> obj.execId) ~
-    ("memory" -> obj.memory) ~
-    ("appid" -> obj.appId) ~
-    ("appdesc" -> writeApplicationDescription(obj.appDesc))
+  def writeExecutorRunner(obj: ExecutorRunner): JsObject = {
+    Json.obj(
+      "id" -> obj.execId,
+      "memory" -> obj.memory,
+      "appid" -> obj.appId,
+      "appdesc" -> writeApplicationDescription(obj.appDesc)
+    )
   }
 
   /**
@@ -138,15 +146,18 @@ private[deploy] object JsonProtocol {
    *         `worker` identifier of the worker that the driver is running on
    *         `mainclass` main class of the command string that started the driver
    */
-  def writeDriverInfo(obj: DriverInfo): JObject = {
-    ("id" -> obj.id) ~
-    ("starttime" -> obj.startTime.toString) ~
-    ("state" -> obj.state.toString) ~
-    ("cores" -> obj.desc.cores) ~
-    ("memory" -> obj.desc.mem) ~
-    ("submitdate" -> obj.submitDate.toString) ~
-    ("worker" -> obj.worker.map(_.id).getOrElse("None")) ~
-    ("mainclass" -> obj.desc.command.arguments(2))
+  def writeDriverInfo(obj: DriverInfo): JsObject = {
+    val worker = obj.worker.map(_.id).getOrElse("None")
+    Json.obj(
+      "id" -> obj.id,
+      "starttime" -> obj.startTime.toString,
+      "state" -> obj.state.toString,
+      "cores" -> obj.desc.cores,
+      "memory" -> obj.desc.mem,
+      "submitdate" -> obj.submitDate.toString,
+      "worker" -> worker,
+      "mainclass" -> obj.desc.command.arguments(2)
+    )
   }
 
   /**
@@ -172,20 +183,22 @@ private[deploy] object JsonProtocol {
    *         of the master
    *         `status` status of the master, see [[MasterState]]
    */
-  def writeMasterState(obj: MasterStateResponse): JObject = {
+  def writeMasterState(obj: MasterStateResponse): JsObject = {
     val aliveWorkers = obj.workers.filter(_.isAlive())
-    ("url" -> obj.uri) ~
-    ("workers" -> obj.workers.toList.map(writeWorkerInfo)) ~
-    ("aliveworkers" -> aliveWorkers.length) ~
-    ("cores" -> aliveWorkers.map(_.cores).sum) ~
-    ("coresused" -> aliveWorkers.map(_.coresUsed).sum) ~
-    ("memory" -> aliveWorkers.map(_.memory).sum) ~
-    ("memoryused" -> aliveWorkers.map(_.memoryUsed).sum) ~
-    ("activeapps" -> obj.activeApps.toList.map(writeApplicationInfo)) ~
-    ("completedapps" -> obj.completedApps.toList.map(writeApplicationInfo)) ~
-    ("activedrivers" -> obj.activeDrivers.toList.map(writeDriverInfo)) ~
-    ("completeddrivers" -> obj.completedDrivers.toList.map(writeDriverInfo)) ~
-    ("status" -> obj.status.toString)
+    Json.obj(
+      "url" -> obj.uri,
+      "workers" -> obj.workers.toList.map(writeWorkerInfo),
+      "aliveworkers" -> aliveWorkers.length,
+      "cores" -> aliveWorkers.map(_.cores).sum,
+      "coresused" -> aliveWorkers.map(_.coresUsed).sum,
+      "memory" -> aliveWorkers.map(_.memory).sum,
+      "memoryused" -> aliveWorkers.map(_.memoryUsed).sum,
+      "activeapps" -> obj.activeApps.toList.map(writeApplicationInfo),
+      "completedapps" -> obj.completedApps.toList.map(writeApplicationInfo),
+      "activedrivers" -> obj.activeDrivers.toList.map(writeDriverInfo),
+      "completeddrivers" -> obj.completedDrivers.toList.map(writeDriverInfo),
+      "status" -> obj.status.toString
+    )
   }
 
   /**
@@ -205,15 +218,17 @@ private[deploy] object JsonProtocol {
    *         `finishedexecutors` a list of Json objects of [[ExecutorRunner]] of the finished
    *         executors of the worker
    */
-  def writeWorkerState(obj: WorkerStateResponse): JObject = {
-    ("id" -> obj.workerId) ~
-    ("masterurl" -> obj.masterUrl) ~
-    ("masterwebuiurl" -> obj.masterWebUiUrl) ~
-    ("cores" -> obj.cores) ~
-    ("coresused" -> obj.coresUsed) ~
-    ("memory" -> obj.memory) ~
-    ("memoryused" -> obj.memoryUsed) ~
-    ("executors" -> obj.executors.map(writeExecutorRunner)) ~
-    ("finishedexecutors" -> obj.finishedExecutors.map(writeExecutorRunner))
+  def writeWorkerState(obj: WorkerStateResponse): JsObject = {
+    Json.obj(
+      "id" -> obj.workerId,
+      "masterurl" -> obj.masterUrl,
+      "masterwebuiurl" -> obj.masterWebUiUrl,
+      "cores" -> obj.cores,
+      "coresused" -> obj.coresUsed,
+      "memory" -> obj.memory,
+      "memoryused" -> obj.memoryUsed,
+      "executors" -> obj.executors.map(writeExecutorRunner),
+      "finishedexecutors" -> obj.finishedExecutors.map(writeExecutorRunner)
+    )
   }
 }

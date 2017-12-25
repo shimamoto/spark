@@ -18,9 +18,7 @@
 package org.apache.spark.ml.r
 
 import org.apache.hadoop.fs.Path
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.ml.recommendation.{ALS, ALSModel}
 import org.apache.spark.ml.util._
@@ -91,9 +89,9 @@ private[r] object ALSWrapper extends MLReadable[ALSWrapper] {
       val rMetadataPath = new Path(path, "rMetadata").toString
       val modelPath = new Path(path, "model").toString
 
-      val rMetadata = ("class" -> instance.getClass.getName) ~
-        ("ratingCol" -> instance.ratingCol)
-      val rMetadataJson: String = compact(render(rMetadata))
+      val rMetadata = Json.obj("class" -> instance.getClass.getName,
+        "ratingCol" -> instance.ratingCol)
+      val rMetadataJson: String = rMetadata.toString
       sc.parallelize(Seq(rMetadataJson), 1).saveAsTextFile(rMetadataPath)
 
       instance.alsModel.save(modelPath)
@@ -103,13 +101,12 @@ private[r] object ALSWrapper extends MLReadable[ALSWrapper] {
   class ALSWrapperReader extends MLReader[ALSWrapper] {
 
     override def load(path: String): ALSWrapper = {
-      implicit val format = DefaultFormats
       val rMetadataPath = new Path(path, "rMetadata").toString
       val modelPath = new Path(path, "model").toString
 
       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()
-      val rMetadata = parse(rMetadataStr)
-      val ratingCol = (rMetadata \ "ratingCol").extract[String]
+      val rMetadata = Json.parse(rMetadataStr)
+      val ratingCol = (rMetadata \ "ratingCol").as[String]
       val alsModel = ALSModel.load(modelPath)
 
       new ALSWrapper(alsModel, ratingCol)

@@ -23,9 +23,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 import com.github.fommil.netlib.BLAS.{getInstance => blas}
-import org.json4s.DefaultFormats
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Since
@@ -673,9 +671,9 @@ object Word2VecModel extends Loader[Word2VecModel] {
 
       val vectorSize = model.values.head.length
       val numWords = model.size
-      val metadata = compact(render(
-        ("class" -> classNameV1_0) ~ ("version" -> formatVersionV1_0) ~
-        ("vectorSize" -> vectorSize) ~ ("numWords" -> numWords)))
+      val metadata = Json.obj(
+        "class" -> classNameV1_0, "version" -> formatVersionV1_0,
+        "vectorSize" -> vectorSize, "numWords" -> numWords).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
       // We want to partition the model in partitions smaller than
@@ -697,9 +695,8 @@ object Word2VecModel extends Loader[Word2VecModel] {
   override def load(sc: SparkContext, path: String): Word2VecModel = {
 
     val (loadedClassName, loadedVersion, metadata) = Loader.loadMetadata(sc, path)
-    implicit val formats = DefaultFormats
-    val expectedVectorSize = (metadata \ "vectorSize").extract[Int]
-    val expectedNumWords = (metadata \ "numWords").extract[Int]
+    val expectedVectorSize = (metadata \ "vectorSize").as[Int]
+    val expectedNumWords = (metadata \ "numWords").as[Int]
     val classNameV1_0 = SaveLoadV1_0.classNameV1_0
     (loadedClassName, loadedVersion) match {
       case (classNameV1_0, "1.0") =>

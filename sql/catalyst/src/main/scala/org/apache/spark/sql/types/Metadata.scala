@@ -19,8 +19,7 @@ package org.apache.spark.sql.types
 
 import scala.collection.mutable
 
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.InterfaceStability
 
@@ -78,7 +77,7 @@ sealed class Metadata private[types] (private[types] val map: Map[String, Any])
   def getMetadataArray(key: String): Array[Metadata] = get(key)
 
   /** Converts to its JSON representation. */
-  def json: String = compact(render(jsonValue))
+  def json: String = jsonValue.toString
 
   override def toString: String = json
 
@@ -111,7 +110,7 @@ sealed class Metadata private[types] (private[types] val map: Map[String, Any])
     map(key).asInstanceOf[T]
   }
 
-  private[sql] def jsonValue: JValue = Metadata.toJsonValue(this)
+  private[sql] def jsonValue: JsValue = Metadata.toJsonValue(this)
 }
 
 /**
@@ -127,45 +126,45 @@ object Metadata {
 
   /** Creates a Metadata instance from JSON. */
   def fromJson(json: String): Metadata = {
-    fromJObject(parse(json).asInstanceOf[JObject])
+    fromJObject(Json.parse(json).asInstanceOf[JsObject])
   }
 
   /** Creates a Metadata instance from JSON AST. */
-  private[sql] def fromJObject(jObj: JObject): Metadata = {
+  private[sql] def fromJObject(jObj: JsObject): Metadata = {
     val builder = new MetadataBuilder
-    jObj.obj.foreach {
-      case (key, JInt(value)) =>
-        builder.putLong(key, value.toLong)
-      case (key, JDouble(value)) =>
-        builder.putDouble(key, value)
-      case (key, JBool(value)) =>
+    jObj.fields.foreach {
+      case (key, JsNumber(value)) if value.isValidLong =>
+        builder.putLong(key, value.longValue)
+      case (key, JsNumber(value)) =>
+        builder.putDouble(key, value.doubleValue)
+      case (key, JsBoolean(value)) =>
         builder.putBoolean(key, value)
-      case (key, JString(value)) =>
+      case (key, JsString(value)) =>
         builder.putString(key, value)
-      case (key, o: JObject) =>
+      case (key, o: JsObject) =>
         builder.putMetadata(key, fromJObject(o))
-      case (key, JArray(value)) =>
+      case (key, JsArray(value)) =>
         if (value.isEmpty) {
           // If it is an empty array, we cannot infer its element type. We put an empty Array[Long].
           builder.putLongArray(key, Array.empty)
         } else {
           value.head match {
-            case _: JInt =>
-              builder.putLongArray(key, value.asInstanceOf[List[JInt]].map(_.num.toLong).toArray)
-            case _: JDouble =>
-              builder.putDoubleArray(key, value.asInstanceOf[List[JDouble]].map(_.num).toArray)
-            case _: JBool =>
-              builder.putBooleanArray(key, value.asInstanceOf[List[JBool]].map(_.value).toArray)
-            case _: JString =>
-              builder.putStringArray(key, value.asInstanceOf[List[JString]].map(_.s).toArray)
-            case _: JObject =>
+            case x: JsNumber if x.value.isValidLong =>
+              builder.putLongArray(key, value.map(_.as[Long]).toArray)
+            case _: JsNumber =>
+              builder.putDoubleArray(key, value.map(_.as[Double]).toArray)
+            case _: JsBoolean =>
+              builder.putBooleanArray(key, value.map(_.as[Boolean]).toArray)
+            case _: JsString =>
+              builder.putStringArray(key, value.map(_.as[String]).toArray)
+            case _: JsObject =>
               builder.putMetadataArray(
-                key, value.asInstanceOf[List[JObject]].map(fromJObject).toArray)
+                key, value.asInstanceOf[Seq[JsObject]].map(fromJObject).toArray)
             case other =>
               throw new RuntimeException(s"Do not support array of type ${other.getClass}.")
           }
         }
-      case (key, JNull) =>
+      case (key, JsNull) =>
         builder.putNull(key)
       case (key, other) =>
         throw new RuntimeException(s"Do not support type ${other.getClass}.")
@@ -174,22 +173,22 @@ object Metadata {
   }
 
   /** Converts to JSON AST. */
-  private def toJsonValue(obj: Any): JValue = {
+  private def toJsonValue(obj: Any): JsValue = {
     obj match {
       case map: Map[_, _] =>
         val fields = map.toList.map { case (k, v) => (k.toString, toJsonValue(v)) }
-        JObject(fields)
+        JsObject(fields)
       case arr: Array[_] =>
         val values = arr.toList.map(toJsonValue)
-        JArray(values)
+        JsArray(values)
       case x: Long =>
-        JInt(x)
+        JsNumber(x)
       case x: Double =>
-        JDouble(x)
+        JsNumber(x)
       case x: Boolean =>
-        JBool(x)
+        JsBoolean(x)
       case x: String =>
-        JString(x)
+        JsString(x)
       case x: Metadata =>
         toJsonValue(x.map)
       case other =>

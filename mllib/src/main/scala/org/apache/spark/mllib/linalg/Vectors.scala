@@ -25,9 +25,7 @@ import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 
 import breeze.linalg.{DenseVector => BDV, SparseVector => BSV, Vector => BV}
-import org.json4s.DefaultFormats
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods.{compact, parse => parseJson, render}
+import play.api.libs.json._, Json.{parse => parseJson}
 
 import org.apache.spark.SparkException
 import org.apache.spark.annotation.{AlphaComponent, Since}
@@ -377,16 +375,15 @@ object Vectors {
    */
   @Since("1.6.0")
   def fromJson(json: String): Vector = {
-    implicit val formats = DefaultFormats
-    val jValue = parseJson(json)
-    (jValue \ "type").extract[Int] match {
+    val jsValue = parseJson(json)
+    (jsValue \ "type").as[Int] match {
       case 0 => // sparse
-        val size = (jValue \ "size").extract[Int]
-        val indices = (jValue \ "indices").extract[Seq[Int]].toArray
-        val values = (jValue \ "values").extract[Seq[Double]].toArray
+        val size = (jsValue \ "size").as[Int]
+        val indices = (jsValue \ "indices").as[Seq[Int]].toArray
+        val values = (jsValue \ "values").as[Seq[Double]].toArray
         sparse(size, indices, values)
       case 1 => // dense
-        val values = (jValue \ "values").extract[Seq[Double]].toArray
+        val values = (jsValue \ "values").as[Seq[Double]].toArray
         dense(values)
       case _ =>
         throw new IllegalArgumentException(s"Cannot parse $json into a vector.")
@@ -718,8 +715,8 @@ class DenseVector @Since("1.0.0") (
 
   @Since("1.6.0")
   override def toJson: String = {
-    val jValue = ("type" -> 1) ~ ("values" -> values.toSeq)
-    compact(render(jValue))
+    val jsValue = Json.obj("type" -> 1, "values" -> values.toSeq)
+    jsValue.toString
   }
 
   @Since("2.0.0")
@@ -926,11 +923,11 @@ class SparseVector @Since("1.0.0") (
 
   @Since("1.6.0")
   override def toJson: String = {
-    val jValue = ("type" -> 0) ~
-      ("size" -> size) ~
-      ("indices" -> indices.toSeq) ~
-      ("values" -> values.toSeq)
-    compact(render(jValue))
+    val jsValue = Json.obj("type" -> 0,
+      "size" -> size,
+      "indices" -> indices.toSeq,
+      "values" -> values.toSeq)
+    jsValue.toString
   }
 
   @Since("2.0.0")

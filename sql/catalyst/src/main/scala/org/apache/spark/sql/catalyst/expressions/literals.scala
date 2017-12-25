@@ -35,7 +35,7 @@ import scala.math.{BigDecimal, BigInt}
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.Try
 
-import org.json4s.JsonAST._
+import play.api.libs.json._
 
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow, ScalaReflection}
@@ -123,11 +123,11 @@ object Literal {
   def fromObject(obj: Any, objType: DataType): Literal = new Literal(obj, objType)
   def fromObject(obj: Any): Literal = new Literal(obj, ObjectType(obj.getClass))
 
-  def fromJSON(json: JValue): Literal = {
-    val dataType = DataType.parseDataType(json \ "dataType")
-    json \ "value" match {
-      case JNull => Literal.create(null, dataType)
-      case JString(str) =>
+  def fromJSON(json: JsValue): Literal = {
+    val dataType = DataType.parseDataType((json \ "dataType").get)
+    (json \ "value").get match {
+      case JsNull => Literal.create(null, dataType)
+      case JsString(str) =>
         val value = dataType match {
           case BooleanType => str.toBoolean
           case ByteType => str.toByte
@@ -262,14 +262,14 @@ case class Literal (value: Any, dataType: DataType) extends LeafExpression {
     case _ => false
   }
 
-  override protected def jsonFields: List[JField] = {
+  override protected def jsonFields: List[(String, JsValue)] = {
     // Turns all kinds of literal values to string in json field, as the type info is hard to
     // retain in json format, e.g. {"a": 123} can be an int, or double, or decimal, etc.
     val jsonValue = (value, dataType) match {
-      case (null, _) => JNull
-      case (i: Int, DateType) => JString(DateTimeUtils.toJavaDate(i).toString)
-      case (l: Long, TimestampType) => JString(DateTimeUtils.toJavaTimestamp(l).toString)
-      case (other, _) => JString(other.toString)
+      case (null, _) => JsNull
+      case (i: Int, DateType) => JsString(DateTimeUtils.toJavaDate(i).toString)
+      case (l: Long, TimestampType) => JsString(DateTimeUtils.toJavaTimestamp(l).toString)
+      case (other, _) => JsString(other.toString)
     }
     ("value" -> jsonValue) :: ("dataType" -> dataType.jsonValue) :: Nil
   }

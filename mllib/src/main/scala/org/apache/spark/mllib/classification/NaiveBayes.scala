@@ -21,8 +21,7 @@ import java.lang.{Iterable => JIterable}
 
 import scala.collection.JavaConverters._
 
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.{SparkContext, SparkException}
 import org.apache.spark.annotation.Since
@@ -197,9 +196,9 @@ object NaiveBayesModel extends Loader[NaiveBayesModel] {
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
 
       // Create JSON metadata.
-      val metadata = compact(render(
-        ("class" -> thisClassName) ~ ("version" -> thisFormatVersion) ~
-          ("numFeatures" -> data.theta(0).length) ~ ("numClasses" -> data.pi.length)))
+      val metadata = Json.obj(
+        "class" -> thisClassName, "version" -> thisFormatVersion,
+        "numFeatures" -> data.theta(0).length, "numClasses" -> data.pi.length).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(metadataPath(path))
 
       // Create Parquet data.
@@ -242,9 +241,9 @@ object NaiveBayesModel extends Loader[NaiveBayesModel] {
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
 
       // Create JSON metadata.
-      val metadata = compact(render(
-        ("class" -> thisClassName) ~ ("version" -> thisFormatVersion) ~
-          ("numFeatures" -> data.theta(0).length) ~ ("numClasses" -> data.pi.length)))
+      val metadata = Json.obj(
+        "class" -> thisClassName, "version" -> thisFormatVersion,
+        "numFeatures" -> data.theta(0).length, "numClasses" -> data.pi.length).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(metadataPath(path))
 
       // Create Parquet data.

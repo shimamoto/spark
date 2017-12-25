@@ -17,8 +17,7 @@
 
 package org.apache.spark.sql.types
 
-import org.json4s.JsonAST.JValue
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.InterfaceStability
 
@@ -48,11 +47,11 @@ case class MapType(
     DataType.buildFormattedString(valueType, s"$prefix    |", builder)
   }
 
-  override private[sql] def jsonValue: JValue =
-    ("type" -> typeName) ~
-      ("keyType" -> keyType.jsonValue) ~
-      ("valueType" -> valueType.jsonValue) ~
-      ("valueContainsNull" -> valueContainsNull)
+  override private[sql] def jsonValue: JsValue =
+    Json.obj("type" -> typeName,
+      "keyType" -> keyType.jsonValue,
+      "valueType" -> valueType.jsonValue,
+      "valueContainsNull" -> valueContainsNull)
 
   /**
    * The default size of a value of the MapType is

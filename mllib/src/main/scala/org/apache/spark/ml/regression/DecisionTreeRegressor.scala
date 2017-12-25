@@ -18,8 +18,7 @@
 package org.apache.spark.ml.regression
 
 import org.apache.hadoop.fs.Path
-import org.json4s.{DefaultFormats, JObject}
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.Since
 import org.apache.spark.ml.{PredictionModel, Predictor}
@@ -260,7 +259,7 @@ object DecisionTreeRegressionModel extends MLReadable[DecisionTreeRegressionMode
     extends MLWriter {
 
     override protected def saveImpl(path: String): Unit = {
-      val extraMetadata: JObject = Map(
+      val extraMetadata: JsObject = Json.obj(
         "numFeatures" -> instance.numFeatures)
       DefaultParamsWriter.saveMetadata(instance, path, sc, Some(extraMetadata))
       val (nodeData, _) = NodeData.build(instance.rootNode, 0)
@@ -276,9 +275,8 @@ object DecisionTreeRegressionModel extends MLReadable[DecisionTreeRegressionMode
     private val className = classOf[DecisionTreeRegressionModel].getName
 
     override def load(path: String): DecisionTreeRegressionModel = {
-      implicit val format = DefaultFormats
       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
-      val numFeatures = (metadata.metadata \ "numFeatures").extract[Int]
+      val numFeatures = (metadata.metadata \ "numFeatures").as[Int]
       val root = loadTreeNodes(path, metadata, sparkSession)
       val model = new DecisionTreeRegressionModel(metadata.uid, root, numFeatures)
       DefaultParamsReader.getAndSetParams(model, metadata)

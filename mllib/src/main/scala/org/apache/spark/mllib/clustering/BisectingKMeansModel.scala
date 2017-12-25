@@ -17,10 +17,7 @@
 
 package org.apache.spark.mllib.clustering
 
-import org.json4s._
-import org.json4s.DefaultFormats
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Since
@@ -114,8 +111,7 @@ object BisectingKMeansModel extends Loader[BisectingKMeansModel] {
   @Since("2.0.0")
   override def load(sc: SparkContext, path: String): BisectingKMeansModel = {
     val (loadedClassName, formatVersion, metadata) = Loader.loadMetadata(sc, path)
-    implicit val formats = DefaultFormats
-    val rootId = (metadata \ "rootId").extract[Int]
+    val rootId = (metadata \ "rootId").as[Int]
     val classNameV1_0 = SaveLoadV1_0.thisClassName
     (loadedClassName, formatVersion) match {
       case (classNameV1_0, "1.0") =>
@@ -144,9 +140,9 @@ object BisectingKMeansModel extends Loader[BisectingKMeansModel] {
 
     def save(sc: SparkContext, model: BisectingKMeansModel, path: String): Unit = {
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
-      val metadata = compact(render(
-        ("class" -> thisClassName) ~ ("version" -> thisFormatVersion)
-          ~ ("rootId" -> model.root.index)))
+      val metadata = Json.obj(
+        "class" -> thisClassName, "version" -> thisFormatVersion,
+        "rootId" -> model.root.index).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
       val data = getNodes(model.root).map(node => Data(node.index, node.size,

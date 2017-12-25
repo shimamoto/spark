@@ -28,8 +28,7 @@ import scala.util.hashing.byteswap64
 
 import com.github.fommil.netlib.BLAS.{getInstance => blas}
 import org.apache.hadoop.fs.Path
-import org.json4s.DefaultFormats
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.{Dependency, Partitioner, ShuffleDependency, SparkContext}
 import org.apache.spark.annotation.{DeveloperApi, Since}
@@ -504,7 +503,7 @@ object ALSModel extends MLReadable[ALSModel] {
   private[ALSModel] class ALSModelWriter(instance: ALSModel) extends MLWriter {
 
     override protected def saveImpl(path: String): Unit = {
-      val extraMetadata = "rank" -> instance.rank
+      val extraMetadata = Json.obj("rank" -> instance.rank)
       DefaultParamsWriter.saveMetadata(instance, path, sc, Some(extraMetadata))
       val userPath = new Path(path, "userFactors").toString
       instance.userFactors.write.format("parquet").save(userPath)
@@ -520,8 +519,7 @@ object ALSModel extends MLReadable[ALSModel] {
 
     override def load(path: String): ALSModel = {
       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)
-      implicit val format = DefaultFormats
-      val rank = (metadata.metadata \ "rank").extract[Int]
+      val rank = (metadata.metadata \ "rank").as[Int]
       val userPath = new Path(path, "userFactors").toString
       val userFactors = sparkSession.read.format("parquet").load(userPath)
       val itemPath = new Path(path, "itemFactors").toString

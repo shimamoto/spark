@@ -17,8 +17,7 @@
 
 package org.apache.spark.ml.classification
 
-import org.json4s.{DefaultFormats, JObject}
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.Since
 import org.apache.spark.ml.feature.LabeledPoint
@@ -292,7 +291,7 @@ object RandomForestClassificationModel extends MLReadable[RandomForestClassifica
 
     override protected def saveImpl(path: String): Unit = {
       // Note: numTrees is not currently used, but could be nice to store for fast querying.
-      val extraMetadata: JObject = Map(
+      val extraMetadata: JsObject = Json.obj(
         "numFeatures" -> instance.numFeatures,
         "numClasses" -> instance.numClasses,
         "numTrees" -> instance.getNumTrees)
@@ -308,12 +307,11 @@ object RandomForestClassificationModel extends MLReadable[RandomForestClassifica
     private val treeClassName = classOf[DecisionTreeClassificationModel].getName
 
     override def load(path: String): RandomForestClassificationModel = {
-      implicit val format = DefaultFormats
       val (metadata: Metadata, treesData: Array[(Metadata, Node)], _) =
         EnsembleModelReadWrite.loadImpl(path, sparkSession, className, treeClassName)
-      val numFeatures = (metadata.metadata \ "numFeatures").extract[Int]
-      val numClasses = (metadata.metadata \ "numClasses").extract[Int]
-      val numTrees = (metadata.metadata \ "numTrees").extract[Int]
+      val numFeatures = (metadata.metadata \ "numFeatures").as[Int]
+      val numClasses = (metadata.metadata \ "numClasses").as[Int]
+      val numTrees = (metadata.metadata \ "numTrees").as[Int]
 
       val trees: Array[DecisionTreeClassificationModel] = treesData.map {
         case (treeMetadata, root) =>

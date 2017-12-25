@@ -24,9 +24,7 @@ import java.util.Arrays.binarySearch
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.{RangePartitioner, SparkContext}
 import org.apache.spark.annotation.Since
@@ -187,9 +185,9 @@ object IsotonicRegressionModel extends Loader[IsotonicRegressionModel] {
         isotonic: Boolean): Unit = {
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
 
-      val metadata = compact(render(
-        ("class" -> thisClassName) ~ ("version" -> thisFormatVersion) ~
-          ("isotonic" -> isotonic)))
+      val metadata = Json.obj(
+        "class" -> thisClassName, "version" -> thisFormatVersion,
+        "isotonic" -> isotonic).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(metadataPath(path))
 
       spark.createDataFrame(
@@ -212,9 +210,8 @@ object IsotonicRegressionModel extends Loader[IsotonicRegressionModel] {
 
   @Since("1.4.0")
   override def load(sc: SparkContext, path: String): IsotonicRegressionModel = {
-    implicit val formats = DefaultFormats
     val (loadedClassName, version, metadata) = loadMetadata(sc, path)
-    val isotonic = (metadata \ "isotonic").extract[Boolean]
+    val isotonic = (metadata \ "isotonic").as[Boolean]
     val classNameV1_0 = SaveLoadV1_0.thisClassName
     (loadedClassName, version) match {
       case (className, "1.0") if className == classNameV1_0 =>

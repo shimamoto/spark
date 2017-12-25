@@ -19,9 +19,7 @@ package org.apache.spark.ml.util
 
 import java.util.concurrent.atomic.AtomicLong
 
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.{Estimator, Model}
@@ -66,33 +64,33 @@ private[spark] class Instrumentation[E <: Estimator[_]] private (
    * Logs the value of the given parameters for the estimator being used in this session.
    */
   def logParams(params: Param[_]*): Unit = {
-    val pairs: Seq[(String, JValue)] = for {
+    val pairs: Seq[(String, JsValue)] = for {
       p <- params
       value <- estimator.get(p)
     } yield {
       val cast = p.asInstanceOf[Param[Any]]
-      p.name -> parse(cast.jsonEncode(value))
+      p.name -> Json.parse(cast.jsonEncode(value))
     }
-    log(compact(render(map2jvalue(pairs.toMap))))
+    log(JsObject(pairs).toString)
   }
 
   def logNumFeatures(num: Long): Unit = {
-    log(compact(render("numFeatures" -> num)))
+    log(Json.obj("numFeatures" -> num).toString)
   }
 
   def logNumClasses(num: Long): Unit = {
-    log(compact(render("numClasses" -> num)))
+    log(Json.obj("numClasses" -> num).toString)
   }
 
   /**
    * Logs the value with customized name field.
    */
   def logNamedValue(name: String, value: String): Unit = {
-    log(compact(render(name -> value)))
+    log(Json.obj(name -> value).toString)
   }
 
   def logNamedValue(name: String, value: Long): Unit = {
-    log(compact(render(name -> value)))
+    log(Json.obj(name -> value).toString)
   }
 
   /**

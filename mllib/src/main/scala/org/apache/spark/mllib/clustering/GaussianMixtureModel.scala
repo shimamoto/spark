@@ -18,9 +18,7 @@
 package org.apache.spark.mllib.clustering
 
 import breeze.linalg.{DenseVector => BreezeVector}
-import org.json4s.DefaultFormats
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Since
@@ -146,8 +144,8 @@ object GaussianMixtureModel extends Loader[GaussianMixtureModel] {
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
 
       // Create JSON metadata.
-      val metadata = compact(render
-        (("class" -> classNameV1_0) ~ ("version" -> formatVersionV1_0) ~ ("k" -> weights.length)))
+      val metadata = Json.obj(
+        "class" -> classNameV1_0, "version" -> formatVersionV1_0, "k" -> weights.length).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
       // Create Parquet data.
@@ -177,8 +175,7 @@ object GaussianMixtureModel extends Loader[GaussianMixtureModel] {
   @Since("1.4.0")
   override def load(sc: SparkContext, path: String): GaussianMixtureModel = {
     val (loadedClassName, version, metadata) = Loader.loadMetadata(sc, path)
-    implicit val formats = DefaultFormats
-    val k = (metadata \ "k").extract[Int]
+    val k = (metadata \ "k").as[Int]
     val classNameV1_0 = SaveLoadV1_0.classNameV1_0
     (loadedClassName, version) match {
       case (classNameV1_0, "1.0") =>

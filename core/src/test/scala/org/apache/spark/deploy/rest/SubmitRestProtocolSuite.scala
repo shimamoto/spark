@@ -19,7 +19,7 @@ package org.apache.spark.deploy.rest
 
 import java.lang.Boolean
 
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.util.Utils
@@ -302,8 +302,8 @@ class SubmitRestProtocolSuite extends SparkFunSuite {
   private def assertJsonEquals(jsonString1: String, jsonString2: String): Unit = {
     val trimmedJson1 = jsonString1.trim
     val trimmedJson2 = jsonString2.trim
-    val json1 = compact(render(parse(trimmedJson1)))
-    val json2 = compact(render(parse(trimmedJson2)))
+    val json1 = Json.parse(trimmedJson1)
+    val json2 = Json.parse(trimmedJson2)
     // Put this on a separate line to avoid printing comparison twice when test fails
     val equals = json1 == json2
     assert(equals, "\"[%s]\" did not equal \"[%s]\"".format(trimmedJson1, trimmedJson2))

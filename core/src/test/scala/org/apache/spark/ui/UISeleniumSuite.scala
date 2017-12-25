@@ -25,8 +25,6 @@ import scala.io.Source
 import scala.xml.Node
 
 import com.gargoylesoftware.htmlunit.DefaultCssErrorHandler
-import org.json4s._
-import org.json4s.jackson.JsonMethods
 import org.openqa.selenium.{By, WebDriver}
 import org.openqa.selenium.htmlunit.HtmlUnitDriver
 import org.scalatest._
@@ -34,6 +32,7 @@ import org.scalatest.concurrent.Eventually._
 import org.scalatest.selenium.WebBrowser
 import org.scalatest.time.SpanSugar._
 import org.w3c.css.sac.CSSParseException
+import play.api.libs.json._
 
 import org.apache.spark._
 import org.apache.spark.LocalSparkContext._
@@ -74,7 +73,6 @@ private[spark] class SparkUICssErrorHandler extends DefaultCssErrorHandler {
 class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with BeforeAndAfterAll {
 
   implicit var webDriver: WebDriver = _
-  implicit val formats = DefaultFormats
 
 
   override def beforeAll(): Unit = {
@@ -128,11 +126,11 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
         tableRowText should contain (StorageLevels.DISK_ONLY.description)
       }
 
-      val storageJson = getJson(ui, "storage/rdd")
-      storageJson.children.length should be (1)
-      (storageJson \ "storageLevel").extract[String] should be (StorageLevels.DISK_ONLY.description)
+      val storageJson = getJson(ui, "storage/rdd").asInstanceOf[JsArray]
+      storageJson.value.length should be (1)
+      (storageJson(0) \ "storageLevel").as[String] should be (StorageLevels.DISK_ONLY.description)
       val rddJson = getJson(ui, "storage/rdd/0")
-      (rddJson  \ "storageLevel").extract[String] should be (StorageLevels.DISK_ONLY.description)
+      (rddJson  \ "storageLevel").as[String] should be (StorageLevels.DISK_ONLY.description)
 
       rdd.unpersist()
       rdd.persist(StorageLevels.MEMORY_ONLY).count()
@@ -147,46 +145,44 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
         tableRowText should contain (StorageLevels.MEMORY_ONLY.description)
       }
 
-      val updatedStorageJson = getJson(ui, "storage/rdd")
-      updatedStorageJson.children.length should be (1)
-      (updatedStorageJson \ "storageLevel").extract[String] should be (
+      val updatedStorageJson = getJson(ui, "storage/rdd").asInstanceOf[JsArray]
+      updatedStorageJson.value.length should be (1)
+      (updatedStorageJson(0) \ "storageLevel").as[String] should be (
         StorageLevels.MEMORY_ONLY.description)
       val updatedRddJson = getJson(ui, "storage/rdd/0")
-      (updatedRddJson  \ "storageLevel").extract[String] should be (
+      (updatedRddJson  \ "storageLevel").as[String] should be (
         StorageLevels.MEMORY_ONLY.description)
 
-      val dataDistributions0 =
-        (updatedRddJson \ "dataDistribution").extract[Seq[RDDDataDistribution]]
-      dataDistributions0.length should be (1)
+      val dataDistributions0: JsLookup =
+        (updatedRddJson \ "dataDistribution")
       val dist0 = dataDistributions0.head
 
-      dist0.onHeapMemoryUsed should not be (None)
-      dist0.memoryUsed should be (dist0.onHeapMemoryUsed.get)
-      dist0.onHeapMemoryRemaining should not be (None)
-      dist0.offHeapMemoryRemaining should not be (None)
-      dist0.memoryRemaining should be (
-        dist0.onHeapMemoryRemaining.get + dist0.offHeapMemoryRemaining.get)
-      dist0.onHeapMemoryUsed should not be (Some(0L))
-      dist0.offHeapMemoryUsed should be (Some(0L))
+      (dist0 \ "onHeapMemoryUsed").asOpt[Long] should not be (None)
+      (dist0 \ "memoryUsed").as[Long] should be ((dist0 \ "onHeapMemoryUsed").as[Long])
+      (dist0 \ "onHeapMemoryRemaining").asOpt[Long] should not be (None)
+      (dist0 \ "offHeapMemoryRemaining").asOpt[Long] should not be (None)
+      (dist0 \ "memoryRemaining").as[Long] should be (
+        (dist0 \ "onHeapMemoryRemaining").as[Long] + (dist0 \ "offHeapMemoryRemaining").as[Long])
+      (dist0 \ "onHeapMemoryUsed").asOpt[Long] should not be (Some(0L))
+      (dist0 \ "offHeapMemoryUsed").asOpt[Long] should be (Some(0L))
 
       rdd.unpersist()
       rdd.persist(StorageLevels.OFF_HEAP).count()
-      val updatedStorageJson1 = getJson(ui, "storage/rdd")
-      updatedStorageJson1.children.length should be (1)
+      val updatedStorageJson1 = getJson(ui, "storage/rdd").asInstanceOf[JsArray]
+      updatedStorageJson1.value.length should be (1)
       val updatedRddJson1 = getJson(ui, "storage/rdd/0")
-      val dataDistributions1 =
-        (updatedRddJson1 \ "dataDistribution").extract[Seq[RDDDataDistribution]]
-      dataDistributions1.length should be (1)
+      val dataDistributions1: JsLookup =
+        (updatedRddJson1 \ "dataDistribution")
       val dist1 = dataDistributions1.head
 
-      dist1.offHeapMemoryUsed should not be (None)
-      dist1.memoryUsed should be (dist1.offHeapMemoryUsed.get)
-      dist1.onHeapMemoryRemaining should not be (None)
-      dist1.offHeapMemoryRemaining should not be (None)
-      dist1.memoryRemaining should be (
-        dist1.onHeapMemoryRemaining.get + dist1.offHeapMemoryRemaining.get)
-      dist1.onHeapMemoryUsed should be (Some(0L))
-      dist1.offHeapMemoryUsed should not be (Some(0L))
+      (dist1 \ "offHeapMemoryUsed").asOpt[Long] should not be (None)
+      (dist1 \ "memoryUsed").as[Long] should be ((dist1 \ "offHeapMemoryUsed").as[Long])
+      (dist1 \ "onHeapMemoryRemaining").asOpt[Long] should not be (None)
+      (dist1 \ "offHeapMemoryRemaining").asOpt[Long] should not be (None)
+      (dist1 \ "memoryRemaining").as[Long] should be (
+        (dist1 \ "onHeapMemoryRemaining").as[Long] + (dist1 \ "offHeapMemoryRemaining").as[Long])
+      (dist1 \ "onHeapMemoryUsed").asOpt[Long] should be (Some(0L))
+      (dist1 \ "offHeapMemoryUsed").asOpt[Long] should not be (Some(0L))
     }
   }
 
@@ -201,9 +197,9 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
         find(id("active")) should be(None)  // Since we hide empty tables
         find(id("failed")).get.text should be("Failed Stages (1)")
       }
-      val stageJson = getJson(sc.ui.get, "stages")
-      stageJson.children.length should be (1)
-      (stageJson \ "status").extract[String] should be (StageStatus.FAILED.name())
+      val stageJson = getJson(sc.ui.get, "stages").asInstanceOf[JsArray]
+      stageJson.value.length should be (1)
+      (stageJson(0) \ "status").as[String] should be (StageStatus.FAILED.name())
 
       // Regression test for SPARK-2105
       class NotSerializable
@@ -284,13 +280,13 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
 
       val jobJson = getJson(sc.ui.get, "jobs")
       for {
-        job @ JObject(_) <- jobJson
-        JInt(jobId) <- job \ "jobId"
-        jobGroup = job \ "jobGroup"
+        job <- jobJson.asInstanceOf[JsArray].value
+        JsNumber(jobId) = (job \ "jobId").get
+        jobGroup = (job \ "jobGroup").toOption
       } {
         jobId.toInt match {
-          case 0 => jobGroup should be (JNothing)
-          case 1 => jobGroup should be (JString("my-job-group"))
+          case 0 => jobGroup should be (None)
+          case 1 => jobGroup should be (Some(JsString("my-job-group")))
         }
       }
     }
@@ -324,18 +320,18 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
         find(cssSelector(".progress-cell .progress")).get.text should be ("2/2 (1 failed)")
       }
       val jobJson = getJson(sc.ui.get, "jobs")
-      (jobJson \ "numTasks").extract[Int]should be (2)
-      (jobJson \ "numCompletedTasks").extract[Int] should be (3)
-      (jobJson \ "numFailedTasks").extract[Int] should be (1)
-      (jobJson \ "numCompletedStages").extract[Int] should be (2)
-      (jobJson \ "numFailedStages").extract[Int] should be (1)
+      (jobJson(0) \ "numTasks").as[Int] should be (2)
+      (jobJson(0) \ "numCompletedTasks").as[Int] should be (3)
+      (jobJson(0) \ "numFailedTasks").as[Int] should be (1)
+      (jobJson(0) \ "numCompletedStages").as[Int] should be (2)
+      (jobJson(0) \ "numFailedStages").as[Int] should be (1)
       val stageJson = getJson(sc.ui.get, "stages")
 
       for {
-        stage @ JObject(_) <- stageJson
-        JString(status) <- stage \ "status"
-        JInt(stageId) <- stage \ "stageId"
-        JInt(attemptId) <- stage \ "attemptId"
+        stage <- stageJson.asInstanceOf[JsArray].value
+        JsString(status) = (stage \ "status").get
+        JsNumber(stageId) = (stage \ "stageId").get
+        JsNumber(attemptId) = (stage \ "attemptId").get
       } {
         val exp = if (attemptId.toInt == 0 && stageId.toInt == 1) {
           StageStatus.FAILED
@@ -351,7 +347,7 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
       } {
         val exp = if (attemptId == 0 && stageId == 1) StageStatus.FAILED else StageStatus.COMPLETE
         val stageJson = getJson(sc.ui.get, s"stages/$stageId/$attemptId")
-        (stageJson \ "status").extract[String] should be (exp.name())
+        (stageJson \ "status").as[String] should be (exp.name())
       }
     }
   }
@@ -570,12 +566,12 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
         }
       }
 
-      val jobsJson = getJson(sc.ui.get, "jobs")
-      jobsJson.children.size should be (expJobInfo.size)
+      val jobsJson = getJson(sc.ui.get, "jobs").asInstanceOf[JsArray]
+      jobsJson.value.size should be (expJobInfo.size)
       for {
-        (job @ JObject(_), idx) <- jobsJson.children.zipWithIndex
-        id = (job \ "jobId").extract[String]
-        name = (job \ "name").extract[String]
+        (job, idx) <- jobsJson.value.zipWithIndex
+        id = (job \ "jobId").as[String]
+        name = (job \ "name").as[String]
       } {
         withClue(s"idx = $idx; id = $id; name = ${name.substring(0, 20)}") {
           id should be (expJobInfo(idx)._1)
@@ -615,12 +611,12 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
         }
       }
 
-      val stagesJson = getJson(sc.ui.get, "stages")
-      stagesJson.children.size should be (3)
+      val stagesJson = getJson(sc.ui.get, "stages").asInstanceOf[JsArray]
+      stagesJson.value.size should be (3)
       for {
-        (stage @ JObject(_), idx) <- stagesJson.children.zipWithIndex
-        id = (stage \ "stageId").extract[String]
-        name = (stage \ "name").extract[String]
+        (stage, idx) <- stagesJson.value.zipWithIndex
+        id = (stage \ "stageId").as[String]
+        name = (stage \ "name").as[String]
       } {
         id should be (expStageInfo(idx)._1)
         name should include (expStageInfo(idx)._2)
@@ -652,15 +648,15 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
     withSpark(newSparkContext()) { sc =>
       val appListRawJson = HistoryServerSuite.getUrl(new URL(
         sc.ui.get.webUrl + "/api/v1/applications"))
-      val appListJsonAst = JsonMethods.parse(appListRawJson)
-      appListJsonAst.children.length should be (1)
-      val attempts = (appListJsonAst \ "attempts").children
-      attempts.size should be (1)
-      (attempts(0) \ "completed").extract[Boolean] should be (false)
+      val appListJsonAst = Json.parse(appListRawJson).asInstanceOf[JsArray]
+      appListJsonAst.value.length should be (1)
+      val attempts = (appListJsonAst(0) \ "attempts").get.asInstanceOf[JsArray]
+      attempts.value.size should be (1)
+      (attempts(0) \ "completed").as[Boolean] should be (false)
       parseDate(attempts(0) \ "startTime") should be (sc.startTime)
       parseDate(attempts(0) \ "endTime") should be (-1)
       val oneAppJsonAst = getJson(sc.ui.get, "")
-      oneAppJsonAst should be (appListJsonAst.children(0))
+      oneAppJsonAst should be (appListJsonAst(0))
     }
   }
 
@@ -712,12 +708,12 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
     go to (ui.webUrl.stripSuffix("/") + path)
   }
 
-  def parseDate(json: JValue): Long = {
-    JacksonMessageWriter.makeISODateFormat.parse(json.extract[String]).getTime
+  def parseDate(json: JsLookup): Long = {
+    JacksonMessageWriter.makeISODateFormat.parse(json.result.as[String]).getTime
   }
 
-  def getJson(ui: SparkUI, path: String): JValue = {
-    JsonMethods.parse(HistoryServerSuite.getUrl(apiUrl(ui, path)))
+  def getJson(ui: SparkUI, path: String): JsValue = {
+    Json.parse(HistoryServerSuite.getUrl(apiUrl(ui, path)))
   }
 
   def apiUrl(ui: SparkUI, path: String): URL = {

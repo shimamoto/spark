@@ -21,7 +21,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
 import scala.util.control.NonFatal
 
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.SparkException
 import org.apache.spark.annotation.InterfaceStability
@@ -318,8 +318,8 @@ case class StructType(fields: Array[StructField]) extends DataType with Seq[Stru
   }
 
   override private[sql] def jsonValue =
-    ("type" -> typeName) ~
-      ("fields" -> map(_.jsonValue))
+    Json.obj("type" -> typeName,
+      "fields" -> map(_.jsonValue))
 
   override def apply(fieldIndex: Int): StructField = fields(fieldIndex)
 

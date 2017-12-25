@@ -20,9 +20,7 @@ package org.apache.spark.mllib.tree.model
 import scala.collection.mutable
 
 import com.github.fommil.netlib.BLAS.{getInstance => blas}
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.{DeveloperApi, Since}
@@ -431,12 +429,12 @@ private[tree] object TreeEnsembleModel extends Logging {
       }
 
       // Create JSON metadata.
-      implicit val format = DefaultFormats
+      implicit val metadataWrites = Json.writes[Metadata]
       val ensembleMetadata = Metadata(model.algo.toString, model.trees(0).algo.toString,
         model.combiningStrategy.toString, model.treeWeights)
-      val metadata = compact(render(
-        ("class" -> className) ~ ("version" -> thisFormatVersion) ~
-          ("metadata" -> Extraction.decompose(ensembleMetadata))))
+      val metadata = Json.obj(
+        "class" -> className, "version" -> thisFormatVersion,
+        "metadata" -> Json.toJson(ensembleMetadata)).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
       // Create Parquet data.
@@ -449,9 +447,9 @@ private[tree] object TreeEnsembleModel extends Logging {
     /**
      * Read metadata from the loaded JSON metadata.
      */
-    def readMetadata(metadata: JValue): Metadata = {
-      implicit val formats = DefaultFormats
-      (metadata \ "metadata").extract[Metadata]
+    def readMetadata(metadata: JsValue): Metadata = {
+      implicit val metadataReads = Json.reads[Metadata]
+      Json.fromJson[Metadata]((metadata \ "metadata").get).get
     }
 
     /**

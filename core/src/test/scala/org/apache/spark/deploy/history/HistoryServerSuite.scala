@@ -33,15 +33,13 @@ import org.apache.commons.io.{FileUtils, IOUtils}
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.eclipse.jetty.proxy.ProxyServlet
 import org.eclipse.jetty.servlet.{ServletContextHandler, ServletHolder}
-import org.json4s.JsonAST._
-import org.json4s.jackson.JsonMethods
-import org.json4s.jackson.JsonMethods._
 import org.openqa.selenium.WebDriver
 import org.openqa.selenium.htmlunit.HtmlUnitDriver
 import org.scalatest.{BeforeAndAfter, Matchers}
 import org.scalatest.concurrent.Eventually
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.selenium.WebBrowser
+import play.api.libs.json._
 
 import org.apache.spark._
 import org.apache.spark.deploy.history.config._
@@ -178,10 +176,8 @@ class HistoryServerSuite extends SparkFunSuite with BeforeAndAfter with Matchers
       val exp = IOUtils.toString(new FileInputStream(
         new File(expRoot, HistoryServerSuite.sanitizePath(name) + "_expectation.json")))
       // compare the ASTs so formatting differences don't cause failures
-      import org.json4s._
-      import org.json4s.jackson.JsonMethods._
-      val jsonAst = parse(clearLastUpdated(jsonOpt.get))
-      val expAst = parse(exp)
+      val jsonAst = Json.parse(clearLastUpdated(jsonOpt.get))
+      val expAst = Json.parse(exp)
       assertValidDataInJson(jsonAst, expAst)
     }
   }
@@ -368,7 +364,6 @@ class HistoryServerSuite extends SparkFunSuite with BeforeAndAfter with Matchers
 
   test("incomplete apps get refreshed") {
     implicit val webDriver: WebDriver = new HtmlUnitDriver
-    implicit val formats = org.json4s.DefaultFormats
 
     // this test dir is explicitly deleted on successful runs; retained for diagnostics when
     // not
@@ -443,9 +438,9 @@ class HistoryServerSuite extends SparkFunSuite with BeforeAndAfter with Matchers
     val stdInterval = interval(100 milliseconds)
     val appId = eventually(timeout(20 seconds), stdInterval) {
       val json = getContentAndCode("applications", port)._2.get
-      val apps = parse(json).asInstanceOf[JArray].arr
+      val apps = Json.parse(json).asInstanceOf[JsArray].value
       apps should have size 1
-      (apps.head \ "id").extract[String]
+      (apps.head \ "id").as[String]
     }
 
     val appIdRoot = buildURL(appId, "")
@@ -473,26 +468,26 @@ class HistoryServerSuite extends SparkFunSuite with BeforeAndAfter with Matchers
     // use REST API to get #of jobs
     def getNumJobsRestful(): Int = {
       val json = HistoryServerSuite.getUrl(applications(appId, "/jobs"))
-      val jsonAst = parse(json)
-      val jobList = jsonAst.asInstanceOf[JArray]
-      jobList.values.size
+      val jsonAst = Json.parse(json)
+      val jobList = jsonAst.asInstanceOf[JsArray]
+      jobList.value.size
     }
 
     // get a list of app Ids of all apps in a given state. REST API
     def listApplications(completed: Boolean): Seq[String] = {
-      val json = parse(HistoryServerSuite.getUrl(applications("", "")))
-      logDebug(s"${JsonMethods.pretty(json)}")
+      val json = Json.parse(HistoryServerSuite.getUrl(applications("", "")))
+      logDebug(s"${Json.prettyPrint(json)}")
       json match {
-        case JNothing => Seq()
-        case apps: JArray =>
-          apps.filter(app => {
+        case JsNull => Seq()
+        case apps: JsArray =>
+          apps.value.filter(app => {
             (app \ "attempts") match {
-              case attempts: JArray =>
-                val state = (attempts.children.head \ "completed").asInstanceOf[JBool]
-                state.value == completed
+              case JsDefined(attempts: JsArray) =>
+                val state = (attempts.value.head \ "completed").as[Boolean]
+                state == completed
               case _ => false
             }
-          }).map(app => (app \ "id").asInstanceOf[JString].values)
+          }).map(app => (app \ "id").as[String])
         case _ => Seq()
       }
     }

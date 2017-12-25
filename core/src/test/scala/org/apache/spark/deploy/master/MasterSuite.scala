@@ -29,12 +29,11 @@ import scala.io.Source
 import scala.language.postfixOps
 import scala.reflect.ClassTag
 
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
 import org.mockito.Mockito.{mock, when}
 import org.scalatest.{BeforeAndAfter, Matchers, PrivateMethodTester}
 import org.scalatest.concurrent.Eventually
 import other.supplier.{CustomPersistenceEngine, CustomRecoveryModeFactory}
+import play.api.libs.json._
 
 import org.apache.spark.{SecurityManager, SparkConf, SparkFunSuite}
 import org.apache.spark.deploy._
@@ -260,7 +259,6 @@ class MasterSuite extends SparkFunSuite
   }
 
   test("master/worker web ui available") {
-    implicit val formats = org.json4s.DefaultFormats
     val conf = new SparkConf()
     val localCluster = new LocalSparkCluster(2, 2, 512, conf)
     localCluster.start()
@@ -268,13 +266,13 @@ class MasterSuite extends SparkFunSuite
       eventually(timeout(5 seconds), interval(100 milliseconds)) {
         val json = Source.fromURL(s"http://localhost:${localCluster.masterWebUIPort}/json")
           .getLines().mkString("\n")
-        val JArray(workers) = (parse(json) \ "workers")
+        val JsArray(workers) = (Json.parse(json) \ "workers").get
         workers.size should be (2)
         workers.foreach { workerSummaryJson =>
-          val JString(workerWebUi) = workerSummaryJson \ "webuiaddress"
-          val workerResponse = parse(Source.fromURL(s"${workerWebUi}/json")
+          val JsString(workerWebUi) = (workerSummaryJson \ "webuiaddress").get
+          val workerResponse = Json.parse(Source.fromURL(s"${workerWebUi}/json")
             .getLines().mkString("\n"))
-          (workerResponse \ "cores").extract[Int] should be (2)
+          (workerResponse \ "cores").as[Int] should be (2)
         }
       }
     } finally {
@@ -283,7 +281,6 @@ class MasterSuite extends SparkFunSuite
   }
 
   test("master/worker web ui available with reverseProxy") {
-    implicit val formats = org.json4s.DefaultFormats
     val reverseProxyUrl = "http://localhost:8080"
     val conf = new SparkConf()
     conf.set("spark.ui.reverseProxy", "true")
@@ -294,14 +291,14 @@ class MasterSuite extends SparkFunSuite
       eventually(timeout(5 seconds), interval(100 milliseconds)) {
         val json = Source.fromURL(s"http://localhost:${localCluster.masterWebUIPort}/json")
           .getLines().mkString("\n")
-        val JArray(workers) = (parse(json) \ "workers")
+        val JsArray(workers) = (Json.parse(json) \ "workers").get
         workers.size should be (2)
         workers.foreach { workerSummaryJson =>
-          val JString(workerId) = workerSummaryJson \ "id"
+          val JsString(workerId) = (workerSummaryJson \ "id").get
           val url = s"http://localhost:${localCluster.masterWebUIPort}/proxy/${workerId}/json"
-          val workerResponse = parse(Source.fromURL(url).getLines().mkString("\n"))
-          (workerResponse \ "cores").extract[Int] should be (2)
-          (workerResponse \ "masterwebuiurl").extract[String] should be (reverseProxyUrl)
+          val workerResponse = Json.parse(Source.fromURL(url).getLines().mkString("\n"))
+          (workerResponse \ "cores").as[Int] should be (2)
+          (workerResponse \ "masterwebuiurl").as[String] should be (reverseProxyUrl)
         }
       }
     } finally {

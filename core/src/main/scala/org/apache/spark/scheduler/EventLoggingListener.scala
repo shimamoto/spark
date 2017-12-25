@@ -31,8 +31,7 @@ import org.apache.hadoop.fs.{FileSystem, FSDataOutputStream, Path}
 import org.apache.hadoop.fs.permission.FsPermission
 import org.apache.hadoop.hdfs.DFSOutputStream
 import org.apache.hadoop.hdfs.client.HdfsDataOutputStream.SyncFlag
-import org.json4s.JsonAST.JValue
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 import org.apache.spark.deploy.SparkHadoopUtil
@@ -88,7 +87,7 @@ private[spark] class EventLoggingListener(
   private var writer: Option[PrintWriter] = None
 
   // For testing. Keep track of all JSON serialized events that have been logged.
-  private[scheduler] val loggedEvents = new ArrayBuffer[JValue]
+  private[scheduler] val loggedEvents = new ArrayBuffer[JsValue]
 
   // Visible for tests only.
   private[scheduler] val logPath = getLogPath(logBaseDir, appId, appAttemptId, compressionCodecName)
@@ -140,7 +139,7 @@ private[spark] class EventLoggingListener(
   private def logEvent(event: SparkListenerEvent, flushLogger: Boolean = false) {
     val eventJson = JsonProtocol.sparkEventToJson(event)
     // scalastyle:off println
-    writer.foreach(_.println(compact(render(eventJson))))
+    writer.foreach(_.println(eventJson.toString))
     // scalastyle:on println
     if (flushLogger) {
       writer.foreach(_.flush())
@@ -298,10 +297,10 @@ private[spark] object EventLoggingListener extends Logging {
   def initEventLog(
       logStream: OutputStream,
       testing: Boolean,
-      loggedEvents: ArrayBuffer[JValue]): Unit = {
+      loggedEvents: ArrayBuffer[JsValue]): Unit = {
     val metadata = SparkListenerLogStart(SPARK_VERSION)
     val eventJson = JsonProtocol.logStartToJson(metadata)
-    val metadataJson = compact(eventJson) + "\n"
+    val metadataJson = eventJson.toString + "\n"
     logStream.write(metadataJson.getBytes(StandardCharsets.UTF_8))
     if (testing && loggedEvents != null) {
       loggedEvents += eventJson

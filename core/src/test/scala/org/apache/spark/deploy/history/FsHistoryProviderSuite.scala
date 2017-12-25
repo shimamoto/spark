@@ -28,12 +28,12 @@ import scala.language.postfixOps
 import com.google.common.io.{ByteStreams, Files}
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.hdfs.DistributedFileSystem
-import org.json4s.jackson.JsonMethods._
 import org.mockito.Matchers.any
 import org.mockito.Mockito.{mock, spy, verify}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.Matchers
 import org.scalatest.concurrent.Eventually._
+import play.api.libs.json._
 
 import org.apache.spark.{SecurityManager, SparkConf, SparkFunSuite}
 import org.apache.spark.deploy.history.config._
@@ -689,7 +689,7 @@ class FsHistoryProviderSuite extends SparkFunSuite with BeforeAndAfter with Matc
 
     val writer = new OutputStreamWriter(bstream, StandardCharsets.UTF_8)
     Utils.tryWithSafeFinally {
-      events.foreach(e => writer.write(compact(render(JsonProtocol.sparkEventToJson(e))) + "\n"))
+      events.foreach(e => writer.write(JsonProtocol.sparkEventToJson(e).toString + "\n"))
     } {
       writer.close()
     }

@@ -18,8 +18,7 @@
 package org.apache.spark.ml.regression
 
 import com.github.fommil.netlib.BLAS.{getInstance => blas}
-import org.json4s.{DefaultFormats, JObject}
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.Since
 import org.apache.spark.internal.Logging
@@ -286,7 +285,7 @@ object GBTRegressionModel extends MLReadable[GBTRegressionModel] {
   class GBTRegressionModelWriter(instance: GBTRegressionModel) extends MLWriter {
 
     override protected def saveImpl(path: String): Unit = {
-      val extraMetadata: JObject = Map(
+      val extraMetadata: JsObject = Json.obj(
         "numFeatures" -> instance.numFeatures,
         "numTrees" -> instance.getNumTrees)
       EnsembleModelReadWrite.saveImpl(instance, path, sparkSession, extraMetadata)
@@ -300,12 +299,11 @@ object GBTRegressionModel extends MLReadable[GBTRegressionModel] {
     private val treeClassName = classOf[DecisionTreeRegressionModel].getName
 
     override def load(path: String): GBTRegressionModel = {
-      implicit val format = DefaultFormats
       val (metadata: Metadata, treesData: Array[(Metadata, Node)], treeWeights: Array[Double]) =
         EnsembleModelReadWrite.loadImpl(path, sparkSession, className, treeClassName)
 
-      val numFeatures = (metadata.metadata \ "numFeatures").extract[Int]
-      val numTrees = (metadata.metadata \ "numTrees").extract[Int]
+      val numFeatures = (metadata.metadata \ "numFeatures").as[Int]
+      val numTrees = (metadata.metadata \ "numTrees").as[Int]
 
       val trees: Array[DecisionTreeRegressionModel] = treesData.map {
         case (treeMetadata, root) =>

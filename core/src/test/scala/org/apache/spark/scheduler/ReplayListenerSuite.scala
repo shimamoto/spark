@@ -22,8 +22,8 @@ import java.net.URI
 import java.util.concurrent.atomic.AtomicInteger
 
 import org.apache.hadoop.fs.Path
-import org.json4s.jackson.JsonMethods._
 import org.scalatest.BeforeAndAfter
+import play.api.libs.json._
 
 import org.apache.spark.{LocalSparkContext, SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.deploy.SparkHadoopUtil
@@ -54,8 +54,8 @@ class ReplayListenerSuite extends SparkFunSuite with BeforeAndAfter with LocalSp
       125L, "Mickey", None)
     val applicationEnd = SparkListenerApplicationEnd(1000L)
     // scalastyle:off println
-    writer.println(compact(render(JsonProtocol.sparkEventToJson(applicationStart))))
-    writer.println(compact(render(JsonProtocol.sparkEventToJson(applicationEnd))))
+    writer.println(JsonProtocol.sparkEventToJson(applicationStart).toString)
+    writer.println(JsonProtocol.sparkEventToJson(applicationEnd).toString)
     // scalastyle:on println
     writer.close()
 
@@ -92,8 +92,8 @@ class ReplayListenerSuite extends SparkFunSuite with BeforeAndAfter with LocalSp
       val applicationEnd = SparkListenerApplicationEnd(1000L)
 
       // scalastyle:off println
-      writer.println(compact(render(JsonProtocol.sparkEventToJson(applicationStart))))
-      writer.println(compact(render(JsonProtocol.sparkEventToJson(applicationEnd))))
+      writer.println(JsonProtocol.sparkEventToJson(applicationStart).toString)
+      writer.println(JsonProtocol.sparkEventToJson(applicationEnd).toString)
       // scalastyle:on println
     }
 

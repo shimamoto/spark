@@ -21,7 +21,7 @@ import java.util.Properties
 
 import scala.collection.mutable.ListBuffer
 
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json.Json.parse
 
 import org.apache.spark._
 import org.apache.spark.LocalSparkContext._

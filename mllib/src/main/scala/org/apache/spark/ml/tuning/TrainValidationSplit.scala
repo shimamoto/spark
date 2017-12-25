@@ -25,7 +25,7 @@ import scala.concurrent.duration.Duration
 import scala.language.existentials
 
 import org.apache.hadoop.fs.Path
-import org.json4s.DefaultFormats
+import play.api.libs.json._
 
 import org.apache.spark.annotation.Since
 import org.apache.spark.internal.Logging
@@ -229,8 +229,6 @@ object TrainValidationSplit extends MLReadable[TrainValidationSplit] {
     private val className = classOf[TrainValidationSplit].getName
 
     override def load(path: String): TrainValidationSplit = {
-      implicit val format = DefaultFormats
-
       val (metadata, estimator, evaluator, estimatorParamMaps) =
         ValidatorParams.loadImpl(path, sc, className)
       val tvs = new TrainValidationSplit(metadata.uid)
@@ -354,9 +352,8 @@ object TrainValidationSplitModel extends MLReadable[TrainValidationSplitModel] {
         "values are \"true\" or \"false\"")
       val persistSubModels = persistSubModelsParam.toBoolean
 
-      import org.json4s.JsonDSL._
-      val extraMetadata = ("validationMetrics" -> instance.validationMetrics.toSeq) ~
-        ("persistSubModels" -> persistSubModels)
+      val extraMetadata = Json.obj("validationMetrics" -> instance.validationMetrics.toSeq,
+        "persistSubModels" -> persistSubModels)
       ValidatorParams.saveImpl(path, instance, sc, Some(extraMetadata))
       val bestModelPath = new Path(path, "bestModel").toString
       instance.bestModel.asInstanceOf[MLWritable].save(bestModelPath)
@@ -379,15 +376,13 @@ object TrainValidationSplitModel extends MLReadable[TrainValidationSplitModel] {
     private val className = classOf[TrainValidationSplitModel].getName
 
     override def load(path: String): TrainValidationSplitModel = {
-      implicit val format = DefaultFormats
-
       val (metadata, estimator, evaluator, estimatorParamMaps) =
         ValidatorParams.loadImpl(path, sc, className)
       val bestModelPath = new Path(path, "bestModel").toString
       val bestModel = DefaultParamsReader.loadParamsInstance[Model[_]](bestModelPath, sc)
-      val validationMetrics = (metadata.metadata \ "validationMetrics").extract[Seq[Double]].toArray
+      val validationMetrics = (metadata.metadata \ "validationMetrics").as[Seq[Double]].toArray
       val persistSubModels = (metadata.metadata \ "persistSubModels")
-        .extractOrElse[Boolean](false)
+        .asOpt[Boolean].getOrElse(false)
 
       val subModels: Option[Array[Model[_]]] = if (persistSubModels) {
         val subModelsPath = new Path(path, "subModels")

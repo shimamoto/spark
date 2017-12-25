@@ -22,11 +22,11 @@ import java.nio.charset.StandardCharsets
 
 import scala.util.control.NonFatal
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, FSDataInputStream, FSDataOutputStream, Path}
-import org.json4s.NoTypeHints
-import org.json4s.jackson.Serialization
+import org.apache.hadoop.fs.{FSDataInputStream, FSDataOutputStream, Path}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.streaming.StreamingQuery
@@ -39,11 +39,11 @@ import org.apache.spark.sql.streaming.StreamingQuery
  * @param id  unique id of the [[StreamingQuery]] that needs to be persisted across restarts
  */
 case class StreamMetadata(id: String) {
-  def json: String = Serialization.write(this)(StreamMetadata.format)
+  def json: String = StreamMetadata.mapper.writeValueAsString(this)
 }
 
 object StreamMetadata extends Logging {
-  implicit val format = Serialization.formats(NoTypeHints)
+  private val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
 
   /** Read the metadata from file if it exists */
   def read(metadataFile: Path, hadoopConf: Configuration): Option[StreamMetadata] = {
@@ -53,7 +53,7 @@ object StreamMetadata extends Logging {
       try {
         input = fs.open(metadataFile)
         val reader = new InputStreamReader(input, StandardCharsets.UTF_8)
-        val metadata = Serialization.read[StreamMetadata](reader)
+        val metadata = mapper.readValue(reader, classOf[StreamMetadata])
         Some(metadata)
       } catch {
         case NonFatal(e) =>
@@ -75,7 +75,7 @@ object StreamMetadata extends Logging {
       val fs = metadataFile.getFileSystem(hadoopConf)
       output = fs.create(metadataFile)
       val writer = new OutputStreamWriter(output)
-      Serialization.write(metadata, writer)
+      mapper.writeValue(writer, metadata)
       writer.close()
     } catch {
       case NonFatal(e) =>

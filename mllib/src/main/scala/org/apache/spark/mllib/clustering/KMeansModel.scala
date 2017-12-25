@@ -19,9 +19,7 @@ package org.apache.spark.mllib.clustering
 
 import scala.collection.JavaConverters._
 
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Since
@@ -126,8 +124,8 @@ object KMeansModel extends Loader[KMeansModel] {
 
     def save(sc: SparkContext, model: KMeansModel, path: String): Unit = {
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
-      val metadata = compact(render(
-        ("class" -> thisClassName) ~ ("version" -> thisFormatVersion) ~ ("k" -> model.k)))
+      val metadata = Json.obj(
+        "class" -> thisClassName, "version" -> thisFormatVersion, "k" -> model.k).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
       val dataRDD = sc.parallelize(model.clusterCentersWithNorm.zipWithIndex).map { case (p, id) =>
         Cluster(id, p.vector)
@@ -136,12 +134,11 @@ object KMeansModel extends Loader[KMeansModel] {
     }
 
     def load(sc: SparkContext, path: String): KMeansModel = {
-      implicit val formats = DefaultFormats
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
       val (className, formatVersion, metadata) = Loader.loadMetadata(sc, path)
       assert(className == thisClassName)
       assert(formatVersion == thisFormatVersion)
-      val k = (metadata \ "k").extract[Int]
+      val k = (metadata \ "k").as[Int]
       val centroids = spark.read.parquet(Loader.dataPath(path))
       Loader.checkSchema[Cluster](centroids.schema)
       val localCentroids = centroids.rdd.map(Cluster.apply).collect()

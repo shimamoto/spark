@@ -23,9 +23,7 @@ import scala.collection.Map
 import scala.reflect.ClassTag
 
 import org.apache.commons.lang3.ClassUtils
-import org.json4s.JsonAST._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.ScalaReflection._
@@ -595,89 +593,93 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] extends Product {
     s"$nodeName(${args.mkString(",")})"
   }
 
-  def toJSON: String = compact(render(jsonValue))
+  def toJSON: String = jsonValue.toString
 
-  def prettyJson: String = pretty(render(jsonValue))
+  def prettyJson: String = Json.prettyPrint(jsonValue)
 
-  private def jsonValue: JValue = {
-    val jsonValues = scala.collection.mutable.ArrayBuffer.empty[JValue]
+  private def jsonValue: JsValue = {
+    val jsonValues = scala.collection.mutable.ArrayBuffer.empty[JsValue]
 
     def collectJsonValue(tn: BaseType): Unit = {
-      val jsonFields = ("class" -> JString(tn.getClass.getName)) ::
-        ("num-children" -> JInt(tn.children.length)) :: tn.jsonFields
-      jsonValues += JObject(jsonFields)
+      val jsonFields = ("class" -> JsString(tn.getClass.getName)) ::
+        ("num-children" -> JsNumber(tn.children.length)) :: tn.jsonFields
+      jsonValues += JsObject(jsonFields)
       tn.children.foreach(collectJsonValue)
     }
 
     collectJsonValue(this)
-    jsonValues
+    JsArray(jsonValues)
   }
 
-  protected def jsonFields: List[JField] = {
+  protected def jsonFields: List[(String, JsValue)] = {
     val fieldNames = getConstructorParameterNames(getClass)
     val fieldValues = productIterator.toSeq ++ otherCopyArgs
     assert(fieldNames.length == fieldValues.length, s"${getClass.getSimpleName} fields: " +
       fieldNames.mkString(", ") + s", values: " + fieldValues.map(_.toString).mkString(", "))
 
-    fieldNames.zip(fieldValues).map {
+    fieldNames.zip(fieldValues).flatMap {
       // If the field value is a child, then use an int to encode it, represents the index of
       // this child in all children.
       case (name, value: TreeNode[_]) if containsChild(value) =>
-        name -> JInt(children.indexOf(value))
+        Some(name -> JsNumber(children.indexOf(value)))
       case (name, value: Seq[BaseType]) if value.forall(containsChild) =>
-        name -> JArray(
-          value.map(v => JInt(children.indexOf(v.asInstanceOf[TreeNode[_]]))).toList
-        )
-      case (name, value) => name -> parseToJson(value)
+        Some(name -> JsArray(
+          value.map(v => JsNumber(children.indexOf(v.asInstanceOf[TreeNode[_]]))).toList
+        ))
+      case (name, value) => Option(parseToJson(value)).map(name -> _)
     }.toList
   }
 
-  private def parseToJson(obj: Any): JValue = obj match {
-    case b: Boolean => JBool(b)
-    case b: Byte => JInt(b.toInt)
-    case s: Short => JInt(s.toInt)
-    case i: Int => JInt(i)
-    case l: Long => JInt(l)
-    case f: Float => JDouble(f)
-    case d: Double => JDouble(d)
-    case b: BigInt => JInt(b)
-    case null => JNull
-    case s: String => JString(s)
-    case u: UUID => JString(u.toString)
+  private def parseToJson(obj: Any): JsValue = obj match {
+    case b: Boolean => JsBoolean(b)
+    case b: Byte => JsNumber(b.toInt)
+    case s: Short => JsNumber(s.toInt)
+    case i: Int => JsNumber(i)
+    case l: Long => JsNumber(l)
+    case f: Float => JsNumber(f)
+    case d: Double => JsNumber(d)
+    case b: BigInt => JsNumber(BigDecimal(b))
+    case null => JsNull
+    case s: String => JsString(s)
+    case u: UUID => JsString(u.toString)
     case dt: DataType => dt.jsonValue
     // SPARK-17356: In usage of mllib, Metadata may store a huge vector of data, transforming
     // it to JSON may trigger OutOfMemoryError.
     case m: Metadata => Metadata.empty.jsonValue
-    case clazz: Class[_] => JString(clazz.getName)
+    case clazz: Class[_] => JsString(clazz.getName)
     case s: StorageLevel =>
-      ("useDisk" -> s.useDisk) ~ ("useMemory" -> s.useMemory) ~ ("useOffHeap" -> s.useOffHeap) ~
-        ("deserialized" -> s.deserialized) ~ ("replication" -> s.replication)
+      Json.obj("useDisk" -> s.useDisk,
+        "useMemory" -> s.useMemory,
+        "useOffHeap" -> s.useOffHeap,
+        "deserialized" -> s.deserialized,
+        "replication" -> s.replication)
     case n: TreeNode[_] => n.jsonValue
-    case o: Option[_] => o.map(parseToJson)
+    case o: Option[_] => o.map(parseToJson).orNull
     // Recursive scan Seq[TreeNode], Seq[Partitioning], Seq[DataType]
     case t: Seq[_] if t.forall(_.isInstanceOf[TreeNode[_]]) ||
       t.forall(_.isInstanceOf[Partitioning]) || t.forall(_.isInstanceOf[DataType]) =>
-      JArray(t.map(parseToJson).toList)
+      JsArray(t.map(parseToJson).toList)
     case t: Seq[_] if t.length > 0 && t.head.isInstanceOf[String] =>
-      JString(Utils.truncatedString(t, "[", ", ", "]"))
-    case t: Seq[_] => JNull
-    case m: Map[_, _] => JNull
+      JsString(Utils.truncatedString(t, "[", ", ", "]"))
+    case t: Seq[_] => JsNull
+    case m: Map[_, _] => JsNull
     // if it's a scala object, we can simply keep the full class path.
     // TODO: currently if the class name ends with "$", we think it's a scala object, there is
     // probably a better way to check it.
-    case obj if obj.getClass.getName.endsWith("$") => "object" -> obj.getClass.getName
+    case obj if obj.getClass.getName.endsWith("$") => Json.obj("object" -> obj.getClass.getName)
     case p: Product if shouldConvertToJson(p) =>
       try {
         val fieldNames = getConstructorParameterNames(p.getClass)
         val fieldValues = p.productIterator.toSeq
         assert(fieldNames.length == fieldValues.length)
-        ("product-class" -> JString(p.getClass.getName)) :: fieldNames.zip(fieldValues).map {
-          case (name, value) => name -> parseToJson(value)
-        }.toList
+        JsObject(("product-class" -> JsString(p.getClass.getName)) ::
+          fieldNames.zip(fieldValues).flatMap {
+            case (name, value) => Option(parseToJson(value)).map(name -> _)
+          }.toList)
       } catch {
         case _: RuntimeException => null
       }
-    case _ => JNull
+    case _ => JsNull
   }
 
   private def shouldConvertToJson(product: Product): Boolean = product match {

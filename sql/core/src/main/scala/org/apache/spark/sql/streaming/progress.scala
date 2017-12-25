@@ -24,10 +24,7 @@ import java.util.UUID
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
-import org.json4s._
-import org.json4s.JsonAST.JValue
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.InterfaceStability
 
@@ -42,18 +39,18 @@ class StateOperatorProgress private[sql](
   ) extends Serializable {
 
   /** The compact JSON representation of this progress. */
-  def json: String = compact(render(jsonValue))
+  def json: String = jsonValue.toString
 
   /** The pretty (i.e. indented) JSON representation of this progress. */
-  def prettyJson: String = pretty(render(jsonValue))
+  def prettyJson: String = Json.prettyPrint(jsonValue)
 
   private[sql] def copy(newNumRowsUpdated: Long): StateOperatorProgress =
     new StateOperatorProgress(numRowsTotal, newNumRowsUpdated, memoryUsedBytes)
 
-  private[sql] def jsonValue: JValue = {
-    ("numRowsTotal" -> JInt(numRowsTotal)) ~
-    ("numRowsUpdated" -> JInt(numRowsUpdated)) ~
-    ("memoryUsedBytes" -> JInt(memoryUsedBytes))
+  private[sql] def jsonValue: JsValue = {
+    Json.obj("numRowsTotal" -> numRowsTotal,
+      "numRowsUpdated" -> numRowsUpdated,
+      "memoryUsedBytes" -> memoryUsedBytes)
   }
 
   override def toString: String = prettyJson
@@ -108,38 +105,45 @@ class StreamingQueryProgress private[sql](
   def processedRowsPerSecond: Double = sources.map(_.processedRowsPerSecond).sum
 
   /** The compact JSON representation of this progress. */
-  def json: String = compact(render(jsonValue))
+  def json: String = jsonValue.toString
 
   /** The pretty (i.e. indented) JSON representation of this progress. */
-  def prettyJson: String = pretty(render(jsonValue))
+  def prettyJson: String = Json.prettyPrint(jsonValue)
 
   override def toString: String = prettyJson
 
-  private[sql] def jsonValue: JValue = {
-    def safeDoubleToJValue(value: Double): JValue = {
-      if (value.isNaN || value.isInfinity) JNothing else JDouble(value)
+  private[sql] def jsonValue: JsValue = {
+    def safeDouble(value: Double): Option[Double] = {
+      if (value.isNaN || value.isInfinity) None else Some(value)
     }
 
-    /** Convert map to JValue while handling empty maps. Also, this sorts the keys. */
-    def safeMapToJValue[T](map: ju.Map[String, T], valueToJValue: T => JValue): JValue = {
-      if (map.isEmpty) return JNothing
-      val keys = map.asScala.keySet.toSeq.sorted
-      keys.map { k => k -> valueToJValue(map.get(k)) : JObject }.reduce(_ ~ _)
+    /** Convert map to JsValue while handling empty maps. Also, this sorts the keys. */
+    def safeMapToJsValue[T](map: ju.Map[String, T],
+                            valueToJsValue: T => JsValue): Option[JsValue] = {
+      if (map.isEmpty) None else {
+        val keys = map.asScala.keySet.toSeq.sorted
+        Some(JsObject(keys.map { k => k -> valueToJsValue(map.get(k)) }))
+      }
     }
 
-    ("id" -> JString(id.toString)) ~
-    ("runId" -> JString(runId.toString)) ~
-    ("name" -> JString(name)) ~
-    ("timestamp" -> JString(timestamp)) ~
-    ("batchId" -> JInt(batchId)) ~
-    ("numInputRows" -> JInt(numInputRows)) ~
-    ("inputRowsPerSecond" -> safeDoubleToJValue(inputRowsPerSecond)) ~
-    ("processedRowsPerSecond" -> safeDoubleToJValue(processedRowsPerSecond)) ~
-    ("durationMs" -> safeMapToJValue[JLong](durationMs, v => JInt(v.toLong))) ~
-    ("eventTime" -> safeMapToJValue[String](eventTime, s => JString(s))) ~
-    ("stateOperators" -> JArray(stateOperators.map(_.jsonValue).toList)) ~
-    ("sources" -> JArray(sources.map(_.jsonValue).toList)) ~
-    ("sink" -> sink.jsonValue)
+    Json.obj("id" -> id.toString,
+      "runId" -> runId.toString,
+      "name" -> name,
+      "timestamp" -> timestamp,
+      "batchId" -> batchId,
+      "numInputRows" -> numInputRows) ++
+    (__ \ "inputRowsPerSecond").writeNullable[Double]
+      .writes(safeDouble(inputRowsPerSecond)) ++
+    (__ \ "processedRowsPerSecond").writeNullable[Double]
+      .writes(safeDouble(processedRowsPerSecond)) ++
+    (__ \ "durationMs").writeNullable[JsValue]
+      .writes(safeMapToJsValue[JLong](durationMs, v => JsNumber(v.toLong))) ++
+    (__ \ "eventTime").writeNullable[JsValue]
+      .writes(safeMapToJsValue[String](eventTime, s => JsString(s))) ++
+    Json.obj(
+      "stateOperators" -> JsArray(stateOperators.map(_.jsonValue).toList),
+      "sources" -> JsArray(sources.map(_.jsonValue).toList),
+      "sink" -> sink.jsonValue)
   }
 }
 
@@ -166,30 +170,30 @@ class SourceProgress protected[sql](
   val processedRowsPerSecond: Double) extends Serializable {
 
   /** The compact JSON representation of this progress. */
-  def json: String = compact(render(jsonValue))
+  def json: String = jsonValue.toString
 
   /** The pretty (i.e. indented) JSON representation of this progress. */
-  def prettyJson: String = pretty(render(jsonValue))
+  def prettyJson: String = Json.prettyPrint(jsonValue)
 
   override def toString: String = prettyJson
 
-  private[sql] def jsonValue: JValue = {
-    def safeDoubleToJValue(value: Double): JValue = {
-      if (value.isNaN || value.isInfinity) JNothing else JDouble(value)
+  private[sql] def jsonValue: JsValue = {
+    def safeDouble(value: Double): Option[Double] = {
+      if (value.isNaN || value.isInfinity) None else Some(value)
     }
 
-    ("description" -> JString(description)) ~
-      ("startOffset" -> tryParse(startOffset)) ~
-      ("endOffset" -> tryParse(endOffset)) ~
-      ("numInputRows" -> JInt(numInputRows)) ~
-      ("inputRowsPerSecond" -> safeDoubleToJValue(inputRowsPerSecond)) ~
-      ("processedRowsPerSecond" -> safeDoubleToJValue(processedRowsPerSecond))
+    Json.obj("description" -> description,
+      "startOffset" -> tryParse(startOffset),
+      "endOffset" -> tryParse(endOffset),
+      "numInputRows" -> numInputRows) ++
+    (__ \ "inputRowsPerSecond").writeNullable[Double].writes(safeDouble(inputRowsPerSecond)) ++
+    (__ \ "processedRowsPerSecond").writeNullable[Double].writes(safeDouble(processedRowsPerSecond))
   }
 
   private def tryParse(json: String) = try {
-    parse(json)
+    Json.parse(json)
   } catch {
-    case NonFatal(e) => JString(json)
+    case NonFatal(e) => JsString(json)
   }
 }
 
@@ -205,14 +209,14 @@ class SinkProgress protected[sql](
     val description: String) extends Serializable {
 
   /** The compact JSON representation of this progress. */
-  def json: String = compact(render(jsonValue))
+  def json: String = jsonValue.toString
 
   /** The pretty (i.e. indented) JSON representation of this progress. */
-  def prettyJson: String = pretty(render(jsonValue))
+  def prettyJson: String = Json.prettyPrint(jsonValue)
 
   override def toString: String = prettyJson
 
-  private[sql] def jsonValue: JValue = {
-    ("description" -> JString(description))
+  private[sql] def jsonValue: JsValue = {
+    Json.obj("description" -> description)
   }
 }

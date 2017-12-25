@@ -20,9 +20,7 @@ package org.apache.spark.ml.clustering
 import java.util.Locale
 
 import org.apache.hadoop.fs.Path
-import org.json4s.DefaultFormats
-import org.json4s.JsonAST.JObject
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.{DeveloperApi, Since}
 import org.apache.spark.internal.Logging
@@ -376,14 +374,13 @@ private object LDAParams {
   def getAndSetParams(model: LDAParams, metadata: Metadata): Unit = {
     VersionUtils.majorMinorVersion(metadata.sparkVersion) match {
       case (1, 6) =>
-        implicit val format = DefaultFormats
         metadata.params match {
-          case JObject(pairs) =>
+          case JsObject(pairs) =>
             pairs.foreach { case (paramName, jsonValue) =>
               val origParam =
                 if (paramName == "topicDistribution") "topicDistributionCol" else paramName
               val param = model.getParam(origParam)
-              val value = param.jsonDecode(compact(render(jsonValue)))
+              val value = param.jsonDecode(jsonValue.toString)
               model.set(param, value)
             }
           case _ =>

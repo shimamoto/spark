@@ -18,9 +18,7 @@
 package org.apache.spark.ml.r
 
 import org.apache.hadoop.fs.Path
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.ml.classification.{GBTClassificationModel, GBTClassifier}
@@ -132,10 +130,10 @@ private[r] object GBTClassifierWrapper extends MLReadable[GBTClassifierWrapper] 
       val rMetadataPath = new Path(path, "rMetadata").toString
       val pipelinePath = new Path(path, "pipeline").toString
 
-      val rMetadata = ("class" -> instance.getClass.getName) ~
-        ("formula" -> instance.formula) ~
-        ("features" -> instance.features.toSeq)
-      val rMetadataJson: String = compact(render(rMetadata))
+      val rMetadata = Json.obj("class" -> instance.getClass.getName,
+        "formula" -> instance.formula,
+        "features" -> instance.features.toSeq)
+      val rMetadataJson: String = rMetadata.toString
 
       sc.parallelize(Seq(rMetadataJson), 1).saveAsTextFile(rMetadataPath)
       instance.pipeline.save(pipelinePath)
@@ -145,15 +143,14 @@ private[r] object GBTClassifierWrapper extends MLReadable[GBTClassifierWrapper] 
   class GBTClassifierWrapperReader extends MLReader[GBTClassifierWrapper] {
 
     override def load(path: String): GBTClassifierWrapper = {
-      implicit val format = DefaultFormats
       val rMetadataPath = new Path(path, "rMetadata").toString
       val pipelinePath = new Path(path, "pipeline").toString
       val pipeline = PipelineModel.load(pipelinePath)
 
       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()
-      val rMetadata = parse(rMetadataStr)
-      val formula = (rMetadata \ "formula").extract[String]
-      val features = (rMetadata \ "features").extract[Array[String]]
+      val rMetadata = Json.parse(rMetadataStr)
+      val formula = (rMetadata \ "formula").as[String]
+      val features = (rMetadata \ "features").as[Array[String]]
 
       new GBTClassifierWrapper(pipeline, formula, features)
     }

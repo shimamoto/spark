@@ -20,8 +20,7 @@ package org.apache.spark.mllib.util
 import scala.reflect.runtime.universe.TypeTag
 
 import org.apache.hadoop.fs.Path
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.{DeveloperApi, Since}
@@ -124,11 +123,10 @@ private[mllib] object Loader {
    * Load metadata from the given path.
    * @return (class name, version, metadata)
    */
-  def loadMetadata(sc: SparkContext, path: String): (String, String, JValue) = {
-    implicit val formats = DefaultFormats
-    val metadata = parse(sc.textFile(metadataPath(path)).first())
-    val clazz = (metadata \ "class").extract[String]
-    val version = (metadata \ "version").extract[String]
+  def loadMetadata(sc: SparkContext, path: String): (String, String, JsValue) = {
+    val metadata = Json.parse(sc.textFile(metadataPath(path)).first())
+    val clazz = (metadata \ "class").as[String]
+    val version = (metadata \ "version").as[String]
     (clazz, version, metadata)
   }
 }

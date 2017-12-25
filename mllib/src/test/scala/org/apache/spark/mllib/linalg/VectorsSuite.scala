@@ -21,7 +21,7 @@ import scala.reflect.ClassTag
 import scala.util.Random
 
 import breeze.linalg.{squaredDistance => breezeSquaredDistance, DenseMatrix => BDM}
-import org.json4s.jackson.JsonMethods.{parse => parseJson}
+import play.api.libs.json.Json.{parse => parseJson}
 
 import org.apache.spark.{SparkConf, SparkException, SparkFunSuite}
 import org.apache.spark.internal.Logging

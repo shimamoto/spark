@@ -22,11 +22,11 @@ import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 import scala.io.Source
 
 import com.fasterxml.jackson.core.JsonProcessingException
+import gnieh.diffson.playJson._
 import org.eclipse.jetty.server.{HttpConnectionFactory, Server, ServerConnector}
 import org.eclipse.jetty.servlet.{ServletContextHandler, ServletHolder}
 import org.eclipse.jetty.util.thread.{QueuedThreadPool, ScheduledExecutorScheduler}
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.{SPARK_VERSION => sparkVersion, SparkConf}
 import org.apache.spark.internal.Logging
@@ -146,13 +146,12 @@ private[rest] abstract class RestServlet extends HttpServlet with Logging {
   protected def findUnknownFields(
       requestJson: String,
       requestMessage: SubmitRestProtocolMessage): Array[String] = {
-    val clientSideJson = parse(requestJson)
-    val serverSideJson = parse(requestMessage.toJson)
-    val Diff(_, _, unknown) = clientSideJson.diff(serverSideJson)
-    unknown match {
-      case j: JObject => j.obj.map { case (k, _) => k }.toArray
-      case _ => Array.empty[String] // No difference
-    }
+    val clientSideJson = requestJson
+    val serverSideJson = requestMessage.toJson
+    val patch = JsonDiff.diff(clientSideJson, serverSideJson, false)
+    patch.collect {
+      case Remove(gnieh.diffson.Pointer(k), _) => k
+    }.toArray
   }
 
   /** Return a human readable String representation of the exception. */

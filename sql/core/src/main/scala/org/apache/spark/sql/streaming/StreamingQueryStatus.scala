@@ -17,10 +17,7 @@
 
 package org.apache.spark.sql.streaming
 
-import org.json4s._
-import org.json4s.JsonAST.JValue
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.InterfaceStability
 
@@ -41,10 +38,10 @@ class StreamingQueryStatus protected[sql](
     val isTriggerActive: Boolean) extends Serializable {
 
   /** The compact JSON representation of this status. */
-  def json: String = compact(render(jsonValue))
+  def json: String = jsonValue.toString
 
   /** The pretty (i.e. indented) JSON representation of this status. */
-  def prettyJson: String = pretty(render(jsonValue))
+  def prettyJson: String = Json.prettyPrint(jsonValue)
 
   override def toString: String = prettyJson
 
@@ -58,9 +55,9 @@ class StreamingQueryStatus protected[sql](
       isTriggerActive = isTriggerActive)
   }
 
-  private[sql] def jsonValue: JValue = {
-    ("message" -> JString(message.toString)) ~
-    ("isDataAvailable" -> JBool(isDataAvailable)) ~
-    ("isTriggerActive" -> JBool(isTriggerActive))
+  private[sql] def jsonValue: JsValue = {
+    Json.obj("message" -> message.toString,
+      "isDataAvailable" -> isDataAvailable,
+      "isTriggerActive" -> isTriggerActive)
   }
 }

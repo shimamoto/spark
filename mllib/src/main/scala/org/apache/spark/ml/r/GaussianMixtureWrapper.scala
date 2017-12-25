@@ -18,9 +18,7 @@
 package org.apache.spark.ml.r
 
 import org.apache.hadoop.fs.Path
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.ml.attribute.AttributeGroup
@@ -108,10 +106,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp
       val rMetadataPath = new Path(path, "rMetadata").toString
       val pipelinePath = new Path(path, "pipeline").toString
 
-      val rMetadata = ("class" -> instance.getClass.getName) ~
-        ("dim" -> instance.dim) ~
-        ("logLikelihood" -> instance.logLikelihood)
-      val rMetadataJson: String = compact(render(rMetadata))
+      val rMetadata = Json.obj("class" -> instance.getClass.getName,
+        "dim" -> instance.dim,
+        "logLikelihood" -> instance.logLikelihood)
+      val rMetadataJson: String = rMetadata.toString
 
       sc.parallelize(Seq(rMetadataJson), 1).saveAsTextFile(rMetadataPath)
       instance.pipeline.save(pipelinePath)
@@ -121,15 +119,14 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp
   class GaussianMixtureWrapperReader extends MLReader[GaussianMixtureWrapper] {
 
     override def load(path: String): GaussianMixtureWrapper = {
-      implicit val format = DefaultFormats
       val rMetadataPath = new Path(path, "rMetadata").toString
       val pipelinePath = new Path(path, "pipeline").toString
       val pipeline = PipelineModel.load(pipelinePath)
 
       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()
-      val rMetadata = parse(rMetadataStr)
-      val dim = (rMetadata \ "dim").extract[Int]
-      val logLikelihood = (rMetadata \ "logLikelihood").extract[Double]
+      val rMetadata = Json.parse(rMetadataStr)
+      val dim = (rMetadata \ "dim").as[Int]
+      val logLikelihood = (rMetadata \ "logLikelihood").as[Double]
       new GaussianMixtureWrapper(pipeline, dim, logLikelihood, isLoaded = true)
     }
   }

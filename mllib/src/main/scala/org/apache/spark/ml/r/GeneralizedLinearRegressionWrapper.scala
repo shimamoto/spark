@@ -20,12 +20,9 @@ package org.apache.spark.ml.r
 import java.util.Locale
 
 import org.apache.hadoop.fs.Path
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.ml.{Pipeline, PipelineModel}
-import org.apache.spark.ml.attribute.AttributeGroup
 import org.apache.spark.ml.feature.RFormula
 import org.apache.spark.ml.r.RWrapperUtils._
 import org.apache.spark.ml.regression._
@@ -159,17 +156,17 @@ private[r] object GeneralizedLinearRegressionWrapper
       val rMetadataPath = new Path(path, "rMetadata").toString
       val pipelinePath = new Path(path, "pipeline").toString
 
-      val rMetadata = ("class" -> instance.getClass.getName) ~
-        ("rFeatures" -> instance.rFeatures.toSeq) ~
-        ("rCoefficients" -> instance.rCoefficients.toSeq) ~
-        ("rDispersion" -> instance.rDispersion) ~
-        ("rNullDeviance" -> instance.rNullDeviance) ~
-        ("rDeviance" -> instance.rDeviance) ~
-        ("rResidualDegreeOfFreedomNull" -> instance.rResidualDegreeOfFreedomNull) ~
-        ("rResidualDegreeOfFreedom" -> instance.rResidualDegreeOfFreedom) ~
-        ("rAic" -> instance.rAic) ~
-        ("rNumIterations" -> instance.rNumIterations)
-      val rMetadataJson: String = compact(render(rMetadata))
+      val rMetadata = Json.obj("class" -> instance.getClass.getName,
+        "rFeatures" -> instance.rFeatures.toSeq,
+        "rCoefficients" -> instance.rCoefficients.toSeq,
+        "rDispersion" -> instance.rDispersion,
+        "rNullDeviance" -> instance.rNullDeviance,
+        "rDeviance" -> instance.rDeviance,
+        "rResidualDegreeOfFreedomNull" -> instance.rResidualDegreeOfFreedomNull,
+        "rResidualDegreeOfFreedom" -> instance.rResidualDegreeOfFreedom,
+        "rAic" -> instance.rAic,
+        "rNumIterations" -> instance.rNumIterations)
+      val rMetadataJson: String = rMetadata.toString
       sc.parallelize(Seq(rMetadataJson), 1).saveAsTextFile(rMetadataPath)
 
       instance.pipeline.save(pipelinePath)
@@ -180,21 +177,20 @@ private[r] object GeneralizedLinearRegressionWrapper
     extends MLReader[GeneralizedLinearRegressionWrapper] {
 
     override def load(path: String): GeneralizedLinearRegressionWrapper = {
-      implicit val format = DefaultFormats
       val rMetadataPath = new Path(path, "rMetadata").toString
       val pipelinePath = new Path(path, "pipeline").toString
 
       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()
-      val rMetadata = parse(rMetadataStr)
-      val rFeatures = (rMetadata \ "rFeatures").extract[Array[String]]
-      val rCoefficients = (rMetadata \ "rCoefficients").extract[Array[Double]]
-      val rDispersion = (rMetadata \ "rDispersion").extract[Double]
-      val rNullDeviance = (rMetadata \ "rNullDeviance").extract[Double]
-      val rDeviance = (rMetadata \ "rDeviance").extract[Double]
-      val rResidualDegreeOfFreedomNull = (rMetadata \ "rResidualDegreeOfFreedomNull").extract[Long]
-      val rResidualDegreeOfFreedom = (rMetadata \ "rResidualDegreeOfFreedom").extract[Long]
-      val rAic = (rMetadata \ "rAic").extract[Double]
-      val rNumIterations = (rMetadata \ "rNumIterations").extract[Int]
+      val rMetadata = Json.parse(rMetadataStr)
+      val rFeatures = (rMetadata \ "rFeatures").as[Array[String]]
+      val rCoefficients = (rMetadata \ "rCoefficients").as[Array[Double]]
+      val rDispersion = (rMetadata \ "rDispersion").as[Double]
+      val rNullDeviance = (rMetadata \ "rNullDeviance").as[Double]
+      val rDeviance = (rMetadata \ "rDeviance").as[Double]
+      val rResidualDegreeOfFreedomNull = (rMetadata \ "rResidualDegreeOfFreedomNull").as[Long]
+      val rResidualDegreeOfFreedom = (rMetadata \ "rResidualDegreeOfFreedom").as[Long]
+      val rAic = (rMetadata \ "rAic").as[Double]
+      val rNumIterations = (rMetadata \ "rNumIterations").as[Int]
 
       val pipeline = PipelineModel.load(pipelinePath)
 

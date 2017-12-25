@@ -17,8 +17,7 @@
 
 package org.apache.spark.mllib.classification.impl
 
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.Vector
@@ -54,9 +53,9 @@ private[classification] object GLMClassificationModel {
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
 
       // Create JSON metadata.
-      val metadata = compact(render(
-        ("class" -> modelClass) ~ ("version" -> thisFormatVersion) ~
-        ("numFeatures" -> numFeatures) ~ ("numClasses" -> numClasses)))
+      val metadata = Json.obj(
+        "class" -> modelClass, "version" -> thisFormatVersion,
+        "numFeatures" -> numFeatures, "numClasses" -> numClasses).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
       // Create Parquet data.

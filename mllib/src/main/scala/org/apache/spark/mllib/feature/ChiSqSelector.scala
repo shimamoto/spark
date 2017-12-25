@@ -19,9 +19,7 @@ package org.apache.spark.mllib.feature
 
 import scala.collection.mutable.ArrayBuilder
 
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Since
@@ -136,8 +134,8 @@ object ChiSqSelectorModel extends Loader[ChiSqSelectorModel] {
     def save(sc: SparkContext, model: ChiSqSelectorModel, path: String): Unit = {
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
 
-      val metadata = compact(render(
-        ("class" -> thisClassName) ~ ("version" -> thisFormatVersion)))
+      val metadata = Json.obj(
+        "class" -> thisClassName, "version" -> thisFormatVersion).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
       // Create Parquet data.
@@ -148,7 +146,6 @@ object ChiSqSelectorModel extends Loader[ChiSqSelectorModel] {
     }
 
     def load(sc: SparkContext, path: String): ChiSqSelectorModel = {
-      implicit val formats = DefaultFormats
       val spark = SparkSession.builder().sparkContext(sc).getOrCreate()
       val (className, formatVersion, metadata) = Loader.loadMetadata(sc, path)
       assert(className == thisClassName)

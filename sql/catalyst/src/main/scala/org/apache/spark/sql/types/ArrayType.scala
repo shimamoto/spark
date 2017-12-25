@@ -19,7 +19,7 @@ package org.apache.spark.sql.types
 
 import scala.math.Ordering
 
-import org.json4s.JsonDSL._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.InterfaceStability
 import org.apache.spark.sql.catalyst.util.ArrayData
@@ -73,9 +73,9 @@ case class ArrayType(elementType: DataType, containsNull: Boolean) extends DataT
   }
 
   override private[sql] def jsonValue =
-    ("type" -> typeName) ~
-      ("elementType" -> elementType.jsonValue) ~
-      ("containsNull" -> containsNull)
+    Json.obj("type" -> typeName,
+      "elementType" -> elementType.jsonValue,
+      "containsNull" -> containsNull)
 
   /**
    * The default size of a value of the ArrayType is the default size of the element type.

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.catalyst.util
 
-import org.json4s.jackson.JsonMethods.parse
+import play.api.libs.json.Json.parse
 
 import org.apache.spark.SparkFunSuite
 import org.apache.spark.sql.types.{Metadata, MetadataBuilder}

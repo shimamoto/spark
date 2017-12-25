@@ -24,9 +24,7 @@ import scala.concurrent.duration.Duration
 import scala.language.existentials
 
 import org.apache.hadoop.fs.Path
-import org.json4s.{DefaultFormats, JObject, _}
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Since
@@ -93,12 +91,12 @@ private[ml] object OneVsRestParams extends ClassifierTypeTrait {
       path: String,
       instance: OneVsRestParams,
       sc: SparkContext,
-      extraMetadata: Option[JObject] = None): Unit = {
+      extraMetadata: Option[JsObject] = None): Unit = {
 
     val params = instance.extractParamMap().toSeq
-    val jsonParams = render(params
+    val jsonParams = JsObject(params
       .filter { case ParamPair(p, v) => p.name != "classifier" }
-      .map { case ParamPair(p, v) => p.name -> parse(p.jsonEncode(v)) }
+      .map { case ParamPair(p, v) => p.name -> Json.parse(p.jsonEncode(v)) }
       .toList)
 
     DefaultParamsWriter.saveMetadata(instance, path, sc, extraMetadata, Some(jsonParams))
@@ -232,8 +230,9 @@ object OneVsRestModel extends MLReadable[OneVsRestModel] {
     OneVsRestParams.validateParams(instance)
 
     override protected def saveImpl(path: String): Unit = {
-      val extraJson = ("labelMetadata" -> instance.labelMetadata.json) ~
-        ("numClasses" -> instance.models.length)
+      val extraJson = Json.obj(
+        "labelMetadata" -> Json.parse(instance.labelMetadata.json),
+        "numClasses" -> instance.models.length)
       OneVsRestParams.saveImpl(path, instance, sc, Some(extraJson))
       instance.models.map(_.asInstanceOf[MLWritable]).zipWithIndex.foreach { case (model, idx) =>
         val modelPath = new Path(path, s"model_$idx").toString
@@ -248,10 +247,9 @@ object OneVsRestModel extends MLReadable[OneVsRestModel] {
     private val className = classOf[OneVsRestModel].getName
 
     override def load(path: String): OneVsRestModel = {
-      implicit val format = DefaultFormats
       val (metadata, classifier) = OneVsRestParams.loadImpl(path, sc, className)
-      val labelMetadata = Metadata.fromJson((metadata.metadata \ "labelMetadata").extract[String])
-      val numClasses = (metadata.metadata \ "numClasses").extract[Int]
+      val labelMetadata = Metadata.fromJson((metadata.metadata \ "labelMetadata").get.toString)
+      val numClasses = (metadata.metadata \ "numClasses").as[Int]
       val models = Range(0, numClasses).toArray.map { idx =>
         val modelPath = new Path(path, s"model_$idx").toString
         DefaultParamsReader.loadParamsInstance[ClassificationModel[_, _]](modelPath, sc)

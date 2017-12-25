@@ -23,12 +23,12 @@ import java.util.{ConcurrentModificationException, EnumSet, UUID}
 
 import scala.reflect.ClassTag
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs._
 import org.apache.hadoop.fs.permission.FsPermission
-import org.json4s.NoTypeHints
-import org.json4s.jackson.Serialization
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
@@ -48,10 +48,7 @@ import org.apache.spark.sql.SparkSession
 class HDFSMetadataLog[T <: AnyRef : ClassTag](sparkSession: SparkSession, path: String)
   extends MetadataLog[T] with Logging {
 
-  private implicit val formats = Serialization.formats(NoTypeHints)
-
-  /** Needed to serialize type T into JSON when using Jackson */
-  private implicit val manifest = Manifest.classType[T](implicitly[ClassTag[T]].runtimeClass)
+  private val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
 
   // Avoid serializing generic sequences, see SPARK-17372
   require(implicitly[ClassTag[T]].runtimeClass != classOf[Seq[_]],
@@ -92,13 +89,13 @@ class HDFSMetadataLog[T <: AnyRef : ClassTag](sparkSession: SparkSession, path: 
 
   protected def serialize(metadata: T, out: OutputStream): Unit = {
     // called inside a try-finally where the underlying stream is closed in the caller
-    Serialization.write(metadata, out)
+    mapper.writeValue(out, metadata)
   }
 
   protected def deserialize(in: InputStream): T = {
     // called inside a try-finally where the underlying stream is closed in the caller
     val reader = new InputStreamReader(in, StandardCharsets.UTF_8)
-    Serialization.read[T](reader)
+    mapper.readValue(reader, implicitly[ClassTag[T]].runtimeClass).asInstanceOf[T]
   }
 
   /**

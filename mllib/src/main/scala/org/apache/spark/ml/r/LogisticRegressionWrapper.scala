@@ -18,9 +18,7 @@
 package org.apache.spark.ml.r
 
 import org.apache.hadoop.fs.Path
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.ml.classification.{LogisticRegression, LogisticRegressionModel}
@@ -187,10 +185,10 @@ private[r] object LogisticRegressionWrapper
       val rMetadataPath = new Path(path, "rMetadata").toString
       val pipelinePath = new Path(path, "pipeline").toString
 
-      val rMetadata = ("class" -> instance.getClass.getName) ~
-        ("features" -> instance.features.toSeq) ~
-        ("labels" -> instance.labels.toSeq)
-      val rMetadataJson: String = compact(render(rMetadata))
+      val rMetadata = Json.obj("class" -> instance.getClass.getName,
+        "features" -> instance.features.toSeq,
+        "labels" -> instance.labels.toSeq)
+      val rMetadataJson: String = rMetadata.toString
       sc.parallelize(Seq(rMetadataJson), 1).saveAsTextFile(rMetadataPath)
 
       instance.pipeline.save(pipelinePath)
@@ -200,14 +198,13 @@ private[r] object LogisticRegressionWrapper
   class LogisticRegressionWrapperReader extends MLReader[LogisticRegressionWrapper] {
 
     override def load(path: String): LogisticRegressionWrapper = {
-      implicit val format = DefaultFormats
       val rMetadataPath = new Path(path, "rMetadata").toString
       val pipelinePath = new Path(path, "pipeline").toString
 
       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()
-      val rMetadata = parse(rMetadataStr)
-      val features = (rMetadata \ "features").extract[Array[String]]
-      val labels = (rMetadata \ "labels").extract[Array[String]]
+      val rMetadata = Json.parse(rMetadataStr)
+      val features = (rMetadata \ "features").as[Array[String]]
+      val labels = (rMetadata \ "labels").as[Array[String]]
 
       val pipeline = PipelineModel.load(pipelinePath)
       new LogisticRegressionWrapper(pipeline, features, labels)

@@ -18,8 +18,7 @@
 package org.apache.spark.ml.r
 
 import org.apache.hadoop.fs.Path
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.ml.fpm.{FPGrowth, FPGrowthModel}
 import org.apache.spark.ml.util._
@@ -74,9 +73,7 @@ private[r] object FPGrowthWrapper extends MLReadable[FPGrowthWrapper] {
       val modelPath = new Path(path, "model").toString
       val rMetadataPath = new Path(path, "rMetadata").toString
 
-      val rMetadataJson: String = compact(render(
-        "class" -> instance.getClass.getName
-      ))
+      val rMetadataJson: String = Json.obj("class" -> instance.getClass.getName).toString
 
       sc.parallelize(Seq(rMetadataJson), 1).saveAsTextFile(rMetadataPath)
 

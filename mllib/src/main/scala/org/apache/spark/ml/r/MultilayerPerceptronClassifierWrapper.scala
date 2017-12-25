@@ -18,9 +18,7 @@
 package org.apache.spark.ml.r
 
 import org.apache.hadoop.fs.Path
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.ml.classification.{MultilayerPerceptronClassificationModel, MultilayerPerceptronClassifier}
@@ -125,7 +123,6 @@ private[r] object MultilayerPerceptronClassifierWrapper
     extends MLReader[MultilayerPerceptronClassifierWrapper]{
 
     override def load(path: String): MultilayerPerceptronClassifierWrapper = {
-      implicit val format = DefaultFormats
       val pipelinePath = new Path(path, "pipeline").toString
 
       val pipeline = PipelineModel.load(pipelinePath)
@@ -140,8 +137,8 @@ private[r] object MultilayerPerceptronClassifierWrapper
       val rMetadataPath = new Path(path, "rMetadata").toString
       val pipelinePath = new Path(path, "pipeline").toString
 
-      val rMetadata = "class" -> instance.getClass.getName
-      val rMetadataJson: String = compact(render(rMetadata))
+      val rMetadata = Json.obj("class" -> instance.getClass.getName)
+      val rMetadataJson: String = rMetadata.toString
       sc.parallelize(Seq(rMetadataJson), 1).saveAsTextFile(rMetadataPath)
 
       instance.pipeline.save(pipelinePath)

@@ -19,8 +19,8 @@ package org.apache.spark.sql.execution.streaming
 
 import scala.util.control.Exception._
 
-import org.json4s.NoTypeHints
-import org.json4s.jackson.Serialization
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 
 /**
  * Offset for the [[FileStreamSource]].
@@ -28,12 +28,12 @@ import org.json4s.jackson.Serialization
  */
 case class FileStreamSourceOffset(logOffset: Long) extends Offset {
   override def json: String = {
-    Serialization.write(this)(FileStreamSourceOffset.format)
+    FileStreamSourceOffset.mapper.writeValueAsString(this)
   }
 }
 
 object FileStreamSourceOffset {
-  implicit val format = Serialization.formats(NoTypeHints)
+  private val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
 
   def apply(offset: Offset): FileStreamSourceOffset = {
     offset match {
@@ -42,7 +42,7 @@ object FileStreamSourceOffset {
         catching(classOf[NumberFormatException]).opt {
           FileStreamSourceOffset(str.toLong)
         }.getOrElse {
-          Serialization.read[FileStreamSourceOffset](str)
+          mapper.readValue(str, classOf[FileStreamSourceOffset])
         }
       case _ =>
         throw new IllegalArgumentException(

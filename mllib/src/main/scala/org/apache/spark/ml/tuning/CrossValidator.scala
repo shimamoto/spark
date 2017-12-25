@@ -24,7 +24,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 
 import org.apache.hadoop.fs.Path
-import org.json4s.DefaultFormats
+import play.api.libs.json._
 
 import org.apache.spark.annotation.Since
 import org.apache.spark.internal.Logging
@@ -235,8 +235,6 @@ object CrossValidator extends MLReadable[CrossValidator] {
     private val className = classOf[CrossValidator].getName
 
     override def load(path: String): CrossValidator = {
-      implicit val format = DefaultFormats
-
       val (metadata, estimator, evaluator, estimatorParamMaps) =
         ValidatorParams.loadImpl(path, sc, className)
       val cv = new CrossValidator(metadata.uid)
@@ -363,9 +361,8 @@ object CrossValidatorModel extends MLReadable[CrossValidatorModel] {
         "values are \"true\" or \"false\"")
       val persistSubModels = persistSubModelsParam.toBoolean
 
-      import org.json4s.JsonDSL._
-      val extraMetadata = ("avgMetrics" -> instance.avgMetrics.toSeq) ~
-        ("persistSubModels" -> persistSubModels)
+      val extraMetadata = Json.obj("avgMetrics" -> instance.avgMetrics.toSeq,
+        "persistSubModels" -> persistSubModels)
       ValidatorParams.saveImpl(path, instance, sc, Some(extraMetadata))
       val bestModelPath = new Path(path, "bestModel").toString
       instance.bestModel.asInstanceOf[MLWritable].save(bestModelPath)
@@ -391,16 +388,14 @@ object CrossValidatorModel extends MLReadable[CrossValidatorModel] {
     private val className = classOf[CrossValidatorModel].getName
 
     override def load(path: String): CrossValidatorModel = {
-      implicit val format = DefaultFormats
-
       val (metadata, estimator, evaluator, estimatorParamMaps) =
         ValidatorParams.loadImpl(path, sc, className)
-      val numFolds = (metadata.params \ "numFolds").extract[Int]
+      val numFolds = (metadata.params \ "numFolds").as[Int]
       val bestModelPath = new Path(path, "bestModel").toString
       val bestModel = DefaultParamsReader.loadParamsInstance[Model[_]](bestModelPath, sc)
-      val avgMetrics = (metadata.metadata \ "avgMetrics").extract[Seq[Double]].toArray
+      val avgMetrics = (metadata.metadata \ "avgMetrics").as[Seq[Double]].toArray
       val persistSubModels = (metadata.metadata \ "persistSubModels")
-        .extractOrElse[Boolean](false)
+        .asOpt[Boolean].getOrElse(false)
 
       val subModels: Option[Array[Array[Model[_]]]] = if (persistSubModels) {
         val subModelsPath = new Path(path, "subModels")

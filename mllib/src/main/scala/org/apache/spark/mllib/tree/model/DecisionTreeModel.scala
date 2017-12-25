@@ -19,9 +19,7 @@ package org.apache.spark.mllib.tree.model
 
 import scala.collection.mutable
 
-import org.json4s._
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.Since
@@ -225,9 +223,9 @@ object DecisionTreeModel extends Loader[DecisionTreeModel] with Logging {
       }
 
       // Create JSON metadata.
-      val metadata = compact(render(
-        ("class" -> thisClassName) ~ ("version" -> thisFormatVersion) ~
-          ("algo" -> model.algo.toString) ~ ("numNodes" -> model.numNodes)))
+      val metadata = Json.obj(
+        "class" -> thisClassName, "version" -> thisFormatVersion,
+        "algo" -> model.algo.toString, "numNodes" -> model.numNodes).toString
       sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))
 
       // Create Parquet data.
@@ -316,10 +314,9 @@ object DecisionTreeModel extends Loader[DecisionTreeModel] with Logging {
    */
   @Since("1.3.0")
   override def load(sc: SparkContext, path: String): DecisionTreeModel = {
-    implicit val formats = DefaultFormats
     val (loadedClassName, version, metadata) = Loader.loadMetadata(sc, path)
-    val algo = (metadata \ "algo").extract[String]
-    val numNodes = (metadata \ "numNodes").extract[Int]
+    val algo = (metadata \ "algo").as[String]
+    val numNodes = (metadata \ "numNodes").as[Int]
     val classNameV1_0 = SaveLoadV1_0.thisClassName
     (loadedClassName, version) match {
       case (className, "1.0") if className == classNameV1_0 =>

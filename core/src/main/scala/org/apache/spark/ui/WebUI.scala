@@ -24,7 +24,7 @@ import scala.collection.mutable.HashMap
 import scala.xml.Node
 
 import org.eclipse.jetty.servlet.ServletContextHandler
-import org.json4s.JsonAST.{JNothing, JValue}
+import play.api.libs.json._
 
 import org.apache.spark.{SecurityManager, SparkConf, SSLOptions}
 import org.apache.spark.internal.Logging
@@ -182,5 +182,5 @@ private[spark] abstract class WebUITab(parent: WebUI, val prefix: String) {
  */
 private[spark] abstract class WebUIPage(var prefix: String) {
   def render(request: HttpServletRequest): Seq[Node]
-  def renderJson(request: HttpServletRequest): JValue = JNothing
+  def renderJson(request: HttpServletRequest): JsValue = JsNull
 }

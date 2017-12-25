@@ -20,8 +20,7 @@ package org.apache.spark.ml.tree
 import scala.reflect.ClassTag
 
 import org.apache.hadoop.fs.Path
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.ml.linalg.{Vector, Vectors}
 import org.apache.spark.ml.param.{Param, Params}
@@ -329,12 +328,11 @@ private[ml] object DecisionTreeModelReadWrite {
       metadata: DefaultParamsReader.Metadata,
       sparkSession: SparkSession): Node = {
     import sparkSession.implicits._
-    implicit val format = DefaultFormats
 
     // Get impurity to construct ImpurityCalculator for each node
     val impurityType: String = {
-      val impurityJson: JValue = metadata.getParamValue("impurity")
-      Param.jsonDecode[String](compact(render(impurityJson)))
+      val impurityJson: JsValue = metadata.getParamValue("impurity")
+      Param.jsonDecode[String](impurityJson.toString)
     }
 
     val dataPath = new Path(path, "data").toString
@@ -389,7 +387,7 @@ private[ml] object EnsembleModelReadWrite {
       instance: M,
       path: String,
       sql: SparkSession,
-      extraMetadata: JObject): Unit = {
+      extraMetadata: JsObject): Unit = {
     DefaultParamsWriter.saveMetadata(instance, path, sql.sparkContext, Some(extraMetadata))
     val treesMetadataWeights: Array[(Int, String, Double)] = instance.trees.zipWithIndex.map {
       case (tree, treeID) =>
@@ -423,13 +421,12 @@ private[ml] object EnsembleModelReadWrite {
       className: String,
       treeClassName: String): (Metadata, Array[(Metadata, Node)], Array[Double]) = {
     import sql.implicits._
-    implicit val format = DefaultFormats
     val metadata = DefaultParamsReader.loadMetadata(path, sql.sparkContext, className)
 
     // Get impurity to construct ImpurityCalculator for each node
     val impurityType: String = {
-      val impurityJson: JValue = metadata.getParamValue("impurity")
-      Param.jsonDecode[String](compact(render(impurityJson)))
+      val impurityJson: JsValue = metadata.getParamValue("impurity")
+      Param.jsonDecode[String](impurityJson.toString)
     }
 
     val treesMetadataPath = new Path(path, "treesMetadata").toString

@@ -52,8 +52,8 @@ import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hadoop.security.UserGroupInformation
 import org.apache.log4j.PropertyConfigurator
 import org.eclipse.jetty.util.MultiException
-import org.json4s._
 import org.slf4j.Logger
+import play.api.libs.json._
 
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
@@ -1862,16 +1862,13 @@ private[spark] object Utils extends Logging {
     obj.getClass.getSimpleName.replace("$", "")
   }
 
-  /** Return an option that translates JNothing to None */
-  def jsonOption(json: JValue): Option[JValue] = {
-    json match {
-      case JNothing => None
-      case value: JValue => Some(value)
-    }
+  /** Return an option that translates JsUndefined or JsNull to None */
+  def jsonOption(json: JsLookup): Option[JsValue] = {
+    json.result.validateOpt[JsValue].getOrElse(None)
   }
 
   /** Return an empty JSON object */
-  def emptyJson: JsonAST.JObject = JObject(List[JField]())
+  def emptyJson: JsObject = JsObject.empty
 
   /**
    * Return a Hadoop FileSystem with the scheme encoded in the given path.

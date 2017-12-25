@@ -36,6 +36,11 @@ object MimaExcludes {
 
   // Exclude rules for 2.3.x
   lazy val v23excludes = v22excludes ++ Seq(
+    // TODO xxx
+    ProblemFilters.exclude[IncompatibleMethTypeProblem]("org.apache.spark.mllib.tree.model.TreeEnsembleModel#SaveLoadV1_0.readMetadata"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("org.apache.spark.ml.param.FloatParam.jValueDecode"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("org.apache.spark.ml.param.FloatParam.jValueEncode"),
+
     // SPARK-18085: Better History Server scalability for many / large applications
     ProblemFilters.exclude[IncompatibleResultTypeProblem]("org.apache.spark.status.api.v1.ExecutorSummary.executorLogs"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("org.apache.spark.deploy.history.HistoryServer.getSparkUI"),

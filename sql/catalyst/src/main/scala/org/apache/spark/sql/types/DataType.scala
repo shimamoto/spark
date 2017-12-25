@@ -19,10 +19,7 @@ package org.apache.spark.sql.types
 
 import java.util.Locale
 
-import org.json4s._
-import org.json4s.JsonAST.JValue
-import org.json4s.JsonDSL._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.annotation.InterfaceStability
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -57,13 +54,13 @@ abstract class DataType extends AbstractDataType {
       .toLowerCase(Locale.ROOT)
   }
 
-  private[sql] def jsonValue: JValue = typeName
+  private[sql] def jsonValue: JsValue = JsString(typeName)
 
   /** The compact JSON representation of this data type. */
-  def json: String = compact(render(jsonValue))
+  def json: String = jsonValue.toString
 
   /** The pretty (i.e. indented) JSON representation of this data type. */
-  def prettyJson: String = pretty(render(jsonValue))
+  def prettyJson: String = Json.prettyPrint(jsonValue)
 
   /** Readable string representation for the type. */
   def simpleString: String = typeName
@@ -110,7 +107,7 @@ abstract class DataType extends AbstractDataType {
 @InterfaceStability.Stable
 object DataType {
 
-  def fromJson(json: String): DataType = parseDataType(parse(json))
+  def fromJson(json: String): DataType = parseDataType(Json.parse(json))
 
   private val nonDecimalNameToType = {
     Seq(NullType, DateType, TimestampType, BinaryType, IntegerType, BooleanType, LongType,
@@ -132,72 +129,72 @@ object DataType {
   }
 
   private object JSortedObject {
-    def unapplySeq(value: JValue): Option[List[(String, JValue)]] = value match {
-      case JObject(seq) => Some(seq.toList.sortBy(_._1))
+    def unapplySeq(value: JsValue): Option[List[(String, JsValue)]] = value match {
+      case JsObject(seq) => Some(seq.toList.sortBy(_._1))
       case _ => None
     }
   }
 
   // NOTE: Map fields must be sorted in alphabetical order to keep consistent with the Python side.
-  private[sql] def parseDataType(json: JValue): DataType = json match {
-    case JString(name) =>
+  private[sql] def parseDataType(json: JsValue): DataType = json match {
+    case JsString(name) =>
       nameToType(name)
 
     case JSortedObject(
-    ("containsNull", JBool(n)),
-    ("elementType", t: JValue),
-    ("type", JString("array"))) =>
+    ("containsNull", JsBoolean(n)),
+    ("elementType", t: JsValue),
+    ("type", JsString("array"))) =>
       ArrayType(parseDataType(t), n)
 
     case JSortedObject(
-    ("keyType", k: JValue),
-    ("type", JString("map")),
-    ("valueContainsNull", JBool(n)),
-    ("valueType", v: JValue)) =>
+    ("keyType", k: JsValue),
+    ("type", JsString("map")),
+    ("valueContainsNull", JsBoolean(n)),
+    ("valueType", v: JsValue)) =>
       MapType(parseDataType(k), parseDataType(v), n)
 
     case JSortedObject(
-    ("fields", JArray(fields)),
-    ("type", JString("struct"))) =>
+    ("fields", JsArray(fields)),
+    ("type", JsString("struct"))) =>
       StructType(fields.map(parseStructField))
 
     // Scala/Java UDT
     case JSortedObject(
-    ("class", JString(udtClass)),
+    ("class", JsString(udtClass)),
     ("pyClass", _),
     ("sqlType", _),
-    ("type", JString("udt"))) =>
+    ("type", JsString("udt"))) =>
       Utils.classForName(udtClass).newInstance().asInstanceOf[UserDefinedType[_]]
 
     // Python UDT
     case JSortedObject(
-    ("pyClass", JString(pyClass)),
-    ("serializedClass", JString(serialized)),
-    ("sqlType", v: JValue),
-    ("type", JString("udt"))) =>
+    ("pyClass", JsString(pyClass)),
+    ("serializedClass", JsString(serialized)),
+    ("sqlType", v: JsValue),
+    ("type", JsString("udt"))) =>
         new PythonUserDefinedType(parseDataType(v), pyClass, serialized)
 
     case other =>
       throw new IllegalArgumentException(
-        s"Failed to convert the JSON string '${compact(render(other))}' to a data type.")
+        s"Failed to convert the JSON string '${other.toString}' to a data type.")
   }
 
-  private def parseStructField(json: JValue): StructField = json match {
+  private def parseStructField(json: JsValue): StructField = json match {
     case JSortedObject(
-    ("metadata", metadata: JObject),
-    ("name", JString(name)),
-    ("nullable", JBool(nullable)),
-    ("type", dataType: JValue)) =>
+    ("metadata", metadata: JsObject),
+    ("name", JsString(name)),
+    ("nullable", JsBoolean(nullable)),
+    ("type", dataType: JsValue)) =>
       StructField(name, parseDataType(dataType), nullable, Metadata.fromJObject(metadata))
     // Support reading schema when 'metadata' is missing.
     case JSortedObject(
-    ("name", JString(name)),
-    ("nullable", JBool(nullable)),
-    ("type", dataType: JValue)) =>
+    ("name", JsString(name)),
+    ("nullable", JsBoolean(nullable)),
+    ("type", dataType: JsValue)) =>
       StructField(name, parseDataType(dataType), nullable)
     case other =>
       throw new IllegalArgumentException(
-        s"Failed to convert the JSON string '${compact(render(other))}' to a field.")
+        s"Failed to convert the JSON string '${other.toString}' to a field.")
   }
 
   protected[types] def buildFormattedString(

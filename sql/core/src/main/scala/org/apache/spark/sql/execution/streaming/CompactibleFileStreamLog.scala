@@ -23,9 +23,9 @@ import java.nio.charset.StandardCharsets.UTF_8
 import scala.io.{Source => IOSource}
 import scala.reflect.ClassTag
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.hadoop.fs.{Path, PathFilter}
-import org.json4s.NoTypeHints
-import org.json4s.jackson.Serialization
 
 import org.apache.spark.sql.SparkSession
 
@@ -47,10 +47,7 @@ abstract class CompactibleFileStreamLog[T <: AnyRef : ClassTag](
 
   import CompactibleFileStreamLog._
 
-  private implicit val formats = Serialization.formats(NoTypeHints)
-
-  /** Needed to serialize type T into JSON when using Jackson */
-  private implicit val manifest = Manifest.classType[T](implicitly[ClassTag[T]].runtimeClass)
+  private val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
 
   protected val minBatchesToRetain = sparkSession.sessionState.conf.minBatchesToRetain
 
@@ -137,7 +134,7 @@ abstract class CompactibleFileStreamLog[T <: AnyRef : ClassTag](
     out.write(("v" + metadataLogVersion).getBytes(UTF_8))
     logData.foreach { data =>
       out.write('\n')
-      out.write(Serialization.write(data).getBytes(UTF_8))
+      out.write(mapper.writeValueAsString(data).getBytes(UTF_8))
     }
   }
 
@@ -147,7 +144,8 @@ abstract class CompactibleFileStreamLog[T <: AnyRef : ClassTag](
       throw new IllegalStateException("Incomplete log file")
     }
     val version = parseVersion(lines.next(), metadataLogVersion)
-    lines.map(Serialization.read[T]).toArray
+    lines.map(json => mapper.readValue(json,
+      implicitly[ClassTag[T]].runtimeClass).asInstanceOf[T]).toArray
   }
 
   override def add(batchId: Long, logs: Array[T]): Boolean = {

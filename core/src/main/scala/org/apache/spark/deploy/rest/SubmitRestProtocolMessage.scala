@@ -22,8 +22,7 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper, SerializationFeature}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import org.json4s.JsonAST._
-import org.json4s.jackson.JsonMethods._
+import play.api.libs.json._
 
 import org.apache.spark.util.Utils
 
@@ -109,9 +108,9 @@ private[spark] object SubmitRestProtocolMessage {
    * If the action field is not found, throw a [[SubmitRestMissingFieldException]].
    */
   def parseAction(json: String): String = {
-    val value: Option[String] = parse(json) match {
-      case JObject(fields) =>
-        fields.collectFirst { case ("action", v) => v }.collect { case JString(s) => s }
+    val value: Option[String] = Json.parse(json) match {
+      case JsObject(fields) =>
+        fields.collectFirst { case ("action", v) => v }.collect { case JsString(s) => s }
       case _ => None
     }
     value.getOrElse {
